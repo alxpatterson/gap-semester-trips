@@ -11,7 +11,7 @@ A shared trip planner for the January–May 2027 gap semester: a trip calendar, 
 1. Create a free project at [supabase.com](https://supabase.com). Pick a region near you; save the database password somewhere safe.
 2. **SQL Editor → New query**: paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and run it. This creates the tables, sharing rules and live updates.
 3. **Authentication → Sign In / Providers**: make sure **Email** is enabled (it is by default).
-4. **Project Settings → API**: copy the **Project URL** and the **anon public** key. You need both in step 2.
+4. Copy the **Project URL** (just `https://<ref>.supabase.co`, without `/rest/v1/`) and the **publishable** key (`sb_publishable_…`; on older projects it's the **anon public** key). You need both in step 2.
 
 ## 2. Deploy to Vercel
 
