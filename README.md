@@ -28,8 +28,13 @@ A shared trip planner for the January–May 2027 gap semester: a trip calendar, 
 
 This app holds exactly one plan, the 2027 gap semester. It is created once in the SQL Editor (not from the app) with Alex as its owner, and `0002_single_plan.sql` removes any way to create another.
 
-1. Open the site, enter your email, and click the link that arrives. You land straight in the plan.
-2. Open **People** and add your girlfriend's email. She signs in with that email and sees the same plan; changes show up for both of you live.
+Sign-in is email + password, and public sign-ups are turned off, so only accounts created in Supabase can get in.
+
+1. Supabase → **Authentication → Users → Add user → Create new user**: enter the email and a password, tick **Auto Confirm User**.
+2. Open the site and sign in with that email and password. You land straight in the plan.
+3. To share: create her account the same way, then add her email under **People** in the app.
+
+Forgot a password? Use **Forgot password?** on the sign-in screen; the emailed link opens a "Set a new password" screen. Change it any time under **People → Change password**.
 
 Anyone else who signs in sees a "This planner is private" message and no data.
 

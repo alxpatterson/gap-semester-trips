@@ -11,7 +11,7 @@ import { MonthGrid, MONTH_RANGE, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
 import { BookingForm, TripForm, type BookingInput, type TripInput } from "./Forms";
 import InstallHint from "./InstallHint";
-import { NotInvited, SetupNeeded, SignIn } from "./SignIn";
+import { NotInvited, RecoveryScreen, SetPassword, SetupNeeded, SignIn } from "./SignIn";
 import { Sheet, useToast } from "./ui";
 
 type View =
@@ -42,19 +42,24 @@ const writeCache = (c: Cache) => {
 export default function TripApp() {
   const [sb, setSb] = useState<SupabaseClient | null | undefined>(undefined);
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
     const client = getSupabase();
     setSb(client);
     if (!client) return;
     client.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = client.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data } = client.auth.onAuthStateChange((event, s) => {
+      if (event === "PASSWORD_RECOVERY") setRecovering(true);
+      setSession(s);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
   if (sb === undefined || session === undefined) return null;
   if (sb === null) return <SetupNeeded />;
   if (!session) return <SignIn sb={sb} />;
+  if (recovering) return <RecoveryScreen sb={sb} onDone={() => setRecovering(false)} />;
   return <PlanLoader sb={sb} email={session.user.email ?? ""} />;
 }
 
@@ -363,6 +368,7 @@ function People({ sb, planId, email, toast }: { sb: SupabaseClient; planId: stri
   const [members, setMembers] = useState<{ email: string; role: string }[] | null>(null);
   const [invite, setInvite] = useState("");
   const [busy, setBusy] = useState(false);
+  const [changing, setChanging] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await sb.from("plan_members").select("email,role").eq("plan_id", planId).order("added_at");
@@ -377,7 +383,8 @@ function People({ sb, planId, email, toast }: { sb: SupabaseClient; planId: stri
   return (
     <>
       <p className="empty" style={{ padding: 0 }}>
-        Everyone here can see and edit this plan. They sign in with the email listed.
+        Everyone here can see and edit this plan. Each person also needs an account with a password, created in Supabase → Authentication →
+        Users → Add user.
       </p>
       <ul className="people">
         {members === null && <li>Loading…</li>}
@@ -414,10 +421,25 @@ function People({ sb, planId, email, toast }: { sb: SupabaseClient; planId: stri
       <div className="section-t">Signed in as</div>
       <div className="row-actions">
         <span>{email}</span>
+        {!changing && (
+          <button className="btn small" onClick={() => setChanging(true)}>
+            Change password
+          </button>
+        )}
         <button className="btn small" onClick={() => sb.auth.signOut()}>
           Sign out
         </button>
       </div>
+      {changing && (
+        <SetPassword
+          sb={sb}
+          onDone={() => {
+            setChanging(false);
+            toast("Password changed");
+          }}
+          onCancel={() => setChanging(false)}
+        />
+      )}
     </>
   );
 }
