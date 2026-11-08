@@ -1,8 +1,11 @@
-import type { Booking, BookingType, Category, Trip } from "./types";
+import type { Booking, BookingType, Category, Trip, TripKind } from "./types";
 
 // ---------- Labels ----------
 export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+export const DOWS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const DOWS_LONG = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export const KINDS = { base: "Base", weekend: "Weekend trip", travel: "Travel leg", other: "Other" } as const;
 export const BOOKING_TYPES: Record<BookingType, string> = {
@@ -55,6 +58,92 @@ export function nights(b: Pick<Booking, "date" | "end_date">) {
 }
 
 export const money = (n: number) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
+
+// ---------- Calendar views ----------
+/** Day, week and month are the three ways the calendar tab can be read; week is the default. */
+export type CalView = "day" | "week" | "month";
+export const CAL_VIEWS: [CalView, string][] = [
+  ["day", "Day"],
+  ["week", "Week"],
+  ["month", "Month"],
+];
+
+/** The plan's window. The calendar won't navigate past either end of it. */
+export const PLAN_RANGE = ["2026-12-01", "2027-06-30"] as const;
+/** Where the calendar opens when today falls outside the plan: the day the semester starts. */
+export const PLAN_START = "2026-12-31";
+
+export const addDays = (d: string, n: number) => fromDayNum(dayNum(d) + n);
+/** Monday = 0, Sunday = 6 — the order the grid and the week view use. */
+export const weekday = (d: string) => (new Date(dayNum(d) * 864e5).getUTCDay() + 6) % 7;
+export const startOfWeek = (d: string) => addDays(d, -weekday(d));
+export const daysInMonth = (ym: string) => new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate();
+
+export function shiftMonth(month: string, delta: number) {
+  let [y, m] = month.split("-").map(Number);
+  m += delta;
+  if (m < 1) { m = 12; y--; }
+  if (m > 12) { m = 1; y++; }
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+/** First and last day a view shows, both inclusive. */
+export function viewRange(view: CalView, anchor: string): { start: string; end: string } {
+  if (view === "day") return { start: anchor, end: anchor };
+  if (view === "week") {
+    const start = startOfWeek(anchor);
+    return { start, end: addDays(start, 6) };
+  }
+  const ym = anchor.slice(0, 7);
+  return { start: `${ym}-01`, end: `${ym}-${daysInMonth(ym)}` };
+}
+
+/** Every day a day or week view lists, in order. */
+export function viewDays(view: CalView, anchor: string) {
+  const { start, end } = viewRange(view, anchor);
+  return Array.from({ length: dayNum(end) - dayNum(start) + 1 }, (_, i) => addDays(start, i));
+}
+
+/** Step one day, week or month. The day of the month is clamped, so Jan 31 → Feb 28. */
+export function shiftAnchor(view: CalView, anchor: string, delta: number) {
+  if (view === "day") return addDays(anchor, delta);
+  if (view === "week") return addDays(anchor, 7 * delta);
+  const ym = shiftMonth(anchor.slice(0, 7), delta);
+  return `${ym}-${String(Math.min(+anchor.slice(8, 10), daysInMonth(ym))).padStart(2, "0")}`;
+}
+
+/** Whether a view anchored on this day still shows any part of the plan's window. */
+export function inPlanRange(view: CalView, anchor: string) {
+  const { start, end } = viewRange(view, anchor);
+  return end >= PLAN_RANGE[0] && start <= PLAN_RANGE[1];
+}
+
+/** The day the calendar opens on: today while the plan is running, otherwise its first day. */
+export function initialAnchor(today: string) {
+  return today >= PLAN_RANGE[0] && today <= PLAN_RANGE[1] ? today : PLAN_START;
+}
+
+export function viewTitle(view: CalView, anchor: string) {
+  if (view === "day") return `${DOWS_LONG[weekday(anchor)]}, ${fmtDate(anchor)}`;
+  if (view === "month") return `${MONTHS_LONG[+anchor.slice(5, 7) - 1]} ${anchor.slice(0, 4)}`;
+  const { start, end } = viewRange("week", anchor);
+  return fmtRange(start, end);
+}
+
+/** Trips covering a day, base first so the longest-running trip reads as the backdrop. */
+const KIND_ORDER: Record<TripKind, number> = { base: 0, travel: 1, weekend: 2, other: 3 };
+export function tripsOn<T extends Pick<Trip, "start_date" | "end_date" | "kind">>(trips: T[], day: string) {
+  return trips
+    .filter((t) => t.start_date && t.start_date <= day && tripEnd(t)! >= day)
+    .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.start_date!.localeCompare(b.start_date!));
+}
+
+/** Bookings to list under a day: the ones that happen on it, plus the day a stay is checked out of. */
+export function bookingsOn<T extends Pick<Booking, "date" | "end_date" | "type" | "time">>(bookings: T[], day: string) {
+  return bookings
+    .filter((b) => b.date === day || (b.type === "stay" && !!b.end_date && b.end_date === day && b.date !== day))
+    .sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
+}
 
 // ---------- Schengen ----------
 /**

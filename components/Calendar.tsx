@@ -1,96 +1,204 @@
 "use client";
 
-import { dayNum, fmtRange, fromDayNum, MONTHS_LONG, tripEnd } from "@/lib/logic";
+import {
+  BOOKING_TYPES,
+  bookingsOn,
+  CAL_VIEWS,
+  dayNum,
+  DOWS,
+  fmtRange,
+  fromDayNum,
+  inPlanRange,
+  KINDS,
+  money,
+  nights,
+  shiftAnchor,
+  tripsOn,
+  tripEnd,
+  viewDays,
+  viewTitle,
+  weekday,
+  type CalView,
+} from "@/lib/logic";
 import type { Booking, Trip } from "@/lib/types";
 
-const ORDER = { base: 0, travel: 1, weekend: 2, other: 3 } as const;
-export const MONTH_RANGE = ["2026-12", "2027-06"] as const;
-
-export function shiftMonth(month: string, delta: number) {
-  let [y, m] = month.split("-").map(Number);
-  m += delta;
-  if (m < 1) { m = 12; y--; }
-  if (m > 12) { m = 1; y++; }
-  return `${y}-${String(m).padStart(2, "0")}`;
-}
-
-export function MonthGrid({
-  month,
+export function CalendarPanel({
+  view,
+  anchor,
   trips,
+  bookings,
+  loaded,
   today,
-  onMonth,
+  onView,
+  onAnchor,
   onTrip,
+  onBooking,
 }: {
-  month: string;
+  view: CalView;
+  anchor: string;
   trips: Trip[];
+  bookings: Booking[];
+  loaded: boolean;
   today: string;
-  onMonth: (m: string) => void;
+  onView: (v: CalView) => void;
+  onAnchor: (d: string) => void;
   onTrip: (id: string) => void;
+  onBooking: (id: string) => void;
 }) {
-  const [y, m] = month.split("-").map(Number);
-  const first = dayNum(`${month}-01`);
-  const weekday = (new Date(first * 864e5).getUTCDay() + 6) % 7; // Monday = 0
-  const start = first - weekday;
-  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const cells = Math.ceil((weekday + daysInMonth) / 7) * 7;
-  const placed = trips
-    .filter((t) => t.start_date)
-    .map((t) => ({ t, a: dayNum(t.start_date!), b: dayNum(tripEnd(t)!) }))
-    .sort((p, q) => ORDER[p.t.kind] - ORDER[q.t.kind] || p.a - q.a);
-
+  const step = view === "month" ? "month" : view === "week" ? "week" : "day";
   return (
     <div className="panel">
       <div className="monthbar">
-        <h2>
-          {MONTHS_LONG[m - 1]} {y}
-        </h2>
-        <button className="btn" aria-label="Previous month" disabled={month <= MONTH_RANGE[0]} onClick={() => onMonth(shiftMonth(month, -1))}>
-          ‹
-        </button>
-        <button className="btn" aria-label="Next month" disabled={month >= MONTH_RANGE[1]} onClick={() => onMonth(shiftMonth(month, 1))}>
-          ›
-        </button>
-      </div>
-      <div className="scroller">
-        <div className="grid">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-            <div key={d} className="dow">
-              {d}
-            </div>
-          ))}
-          {Array.from({ length: cells }, (_, i) => {
-            const n = start + i;
-            const ds = fromDayNum(n);
-            const col = i % 7;
-            const here = placed.filter((p) => p.a <= n && n <= p.b);
-            return (
-              <div key={ds} className={`cell ${ds.slice(0, 7) !== month ? "out" : ""} ${ds === today ? "today" : ""}`}>
-                <span className="dnum">{+ds.slice(8)}</span>
-                {here.slice(0, 3).map(({ t, a, b }) => {
-                  const showLabel = n === a || col === 0 || ds.endsWith("-01");
-                  return (
-                    <button
-                      key={t.id}
-                      className={`bar k-${t.kind} ${t.status === "idea" ? "idea" : ""} ${n === a ? "s" : ""} ${n === b || col === 6 ? "e" : ""}`}
-                      title={`${t.title} · ${fmtRange(t.start_date, t.end_date)}`}
-                      onClick={() => onTrip(t.id)}
-                    >
-                      {showLabel ? t.title : " "}
-                    </button>
-                  );
-                })}
-                {here.length > 3 && <span className="more">+{here.length - 3} more</span>}
-              </div>
-            );
-          })}
+        <h2>{viewTitle(view, anchor)}</h2>
+        <div className="navs">
+          <button className="btn" aria-label={`Previous ${step}`} disabled={!inPlanRange(view, shiftAnchor(view, anchor, -1))} onClick={() => onAnchor(shiftAnchor(view, anchor, -1))}>
+            ‹
+          </button>
+          <button className="btn" aria-label={`Next ${step}`} disabled={!inPlanRange(view, shiftAnchor(view, anchor, 1))} onClick={() => onAnchor(shiftAnchor(view, anchor, 1))}>
+            ›
+          </button>
+          <div className="tabs seg" role="group" aria-label="Calendar view">
+            {CAL_VIEWS.map(([v, label]) => (
+              <button key={v} aria-pressed={view === v} onClick={() => onView(v)}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {view === "month" ? (
+        <MonthGrid month={anchor.slice(0, 7)} trips={trips} today={today} onTrip={onTrip} />
+      ) : (
+        <Agenda view={view} anchor={anchor} trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={onTrip} onBooking={onBooking} />
+      )}
+
       <div className="legend">
         <span className="k-base"><i />Base</span>
         <span className="k-weekend"><i />Weekend trip</span>
         <span className="k-travel"><i />Travel leg</span>
         <span className="k-other"><i />Other</span>
         <span>Striped = still an idea</span>
+      </div>
+    </div>
+  );
+}
+
+/** Day and week share one layout: a row per day, with the trips covering it and that day's bookings. */
+function Agenda({
+  view,
+  anchor,
+  trips,
+  bookings,
+  loaded,
+  today,
+  onTrip,
+  onBooking,
+}: {
+  view: CalView;
+  anchor: string;
+  trips: Trip[];
+  bookings: Booking[];
+  loaded: boolean;
+  today: string;
+  onTrip: (id: string) => void;
+  onBooking: (id: string) => void;
+}) {
+  const days = viewDays(view, anchor);
+  const one = view === "day";
+  return (
+    <div className={`agenda ${one ? "one" : ""}`}>
+      {days.map((d) => {
+        const here = tripsOn(trips, d);
+        const items = bookingsOn(bookings, d);
+        return (
+          <div key={d} className={`aday ${d === today ? "today" : ""} ${weekday(d) > 4 ? "wknd" : ""}`}>
+            <div className="ahead">
+              <span className="adow">{d === today && !one ? "Today" : DOWS[weekday(d)]}</span>
+              <span className="adnum">{+d.slice(8)}</span>
+              {one && d === today && <span className="pill booked">Today</span>}
+            </div>
+            <div className="abody">
+              {here.map((t) => (
+                <button key={t.id} className={`atrip k-${t.kind} ${t.status === "idea" ? "idea" : ""}`} onClick={() => onTrip(t.id)}>
+                  <span className="t">{t.title}</span>
+                  <span className="d">
+                    {[t.place || KINDS[t.kind], fmtRange(t.start_date, t.end_date)].filter(Boolean).join(" · ")}
+                  </span>
+                </button>
+              ))}
+              {items.map((b) => {
+                const n = nights(b);
+                const checkout = b.type === "stay" && b.end_date === d && b.date !== d;
+                const meta = [
+                  checkout ? "Check out" : "",
+                  b.provider,
+                  !checkout && n ? `${n} night${n > 1 ? "s" : ""}` : "",
+                  one && Number(b.cost) > 0 ? money(b.cost) : "",
+                ].filter(Boolean);
+                return (
+                  <button key={`${b.id}-${checkout ? "out" : "in"}`} className="abook" onClick={() => onBooking(b.id)}>
+                    <span className="tm">{b.time || "—"}</span>
+                    <span className="n">
+                      <span className="ttl">{b.title}</span>
+                      <span className="sub">{[BOOKING_TYPES[b.type], ...meta].join(" · ")}</span>
+                    </span>
+                    <span className={`pill ${b.status}`}>{b.status}</span>
+                  </button>
+                );
+              })}
+              {here.length === 0 && items.length === 0 && (
+                <span className="anone">{loaded ? (one ? "Nothing planned for this day." : "Nothing planned") : "…"}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MonthGrid({ month, trips, today, onTrip }: { month: string; trips: Trip[]; today: string; onTrip: (id: string) => void }) {
+  const [y, m] = month.split("-").map(Number);
+  const first = dayNum(`${month}-01`);
+  const weekdayOfFirst = (new Date(first * 864e5).getUTCDay() + 6) % 7; // Monday = 0
+  const start = first - weekdayOfFirst;
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const cells = Math.ceil((weekdayOfFirst + daysInMonth) / 7) * 7;
+
+  return (
+    <div className="scroller">
+      <div className="grid">
+        {DOWS.map((d) => (
+          <div key={d} className="dow">
+            {d}
+          </div>
+        ))}
+        {Array.from({ length: cells }, (_, i) => {
+          const n = start + i;
+          const ds = fromDayNum(n);
+          const col = i % 7;
+          const here = tripsOn(trips, ds).map((t) => ({ t, a: dayNum(t.start_date!), b: dayNum(tripEnd(t)!) }));
+          return (
+            <div key={ds} className={`cell ${ds.slice(0, 7) !== month ? "out" : ""} ${ds === today ? "today" : ""}`}>
+              <span className="dnum">{+ds.slice(8)}</span>
+              {here.slice(0, 3).map(({ t, a, b }) => {
+                const showLabel = n === a || col === 0 || ds.endsWith("-01");
+                return (
+                  <button
+                    key={t.id}
+                    className={`bar k-${t.kind} ${t.status === "idea" ? "idea" : ""} ${n === a ? "s" : ""} ${n === b || col === 6 ? "e" : ""}`}
+                    title={`${t.title} · ${fmtRange(t.start_date, t.end_date)}`}
+                    onClick={() => onTrip(t.id)}
+                  >
+                    {showLabel ? t.title : " "}
+                  </button>
+                );
+              })}
+              {here.length > 3 && <span className="more">+{here.length - 3} more</span>}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

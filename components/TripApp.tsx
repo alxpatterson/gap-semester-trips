@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
-import { localToday, maxSchengenWindow, MONTHS } from "@/lib/logic";
+import { initialAnchor, localToday, maxSchengenWindow, MONTHS, type CalView } from "@/lib/logic";
 import type { Booking, Category, Plan, SyncStatus, Trip } from "@/lib/types";
 import BudgetPanel from "./BudgetPanel";
 import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
-import { MonthGrid, MONTH_RANGE, TripRail } from "./Calendar";
+import { CalendarPanel, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
 import { BookingForm, TripForm, type BookingInput, type TripInput } from "./Forms";
 import InstallHint from "./InstallHint";
@@ -109,10 +109,8 @@ function PlanView({ sb, planId, email }: { sb: SupabaseClient; planId: string; e
 
   const today = localToday();
   const [tab, setTab] = useState<"cal" | "book">("cal");
-  const [month, setMonth] = useState(() => {
-    const m = today.slice(0, 7);
-    return m >= MONTH_RANGE[0] && m <= MONTH_RANGE[1] ? m : "2027-01";
-  });
+  const [calView, setCalView] = useState<CalView>("week");
+  const [anchor, setAnchor] = useState(() => initialAnchor(today));
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [view, setView] = useState<View>(null);
@@ -197,7 +195,7 @@ function PlanView({ sb, planId, email }: { sb: SupabaseClient; planId: string; e
       id ? "Trip saved" : "Trip added",
     );
     if (!done) return;
-    if (data.start_date) setMonth(data.start_date.slice(0, 7));
+    if (data.start_date) setAnchor(data.start_date);
     setView(id ? { kind: "trip", id } : null);
   };
 
@@ -339,7 +337,18 @@ function PlanView({ sb, planId, email }: { sb: SupabaseClient; planId: string; e
 
       {tab === "cal" ? (
         <section className="cal-layout">
-          <MonthGrid month={month} trips={trips} today={today} onMonth={setMonth} onTrip={(id) => setView({ kind: "trip", id })} />
+          <CalendarPanel
+            view={calView}
+            anchor={anchor}
+            trips={trips}
+            bookings={bookings}
+            loaded={loaded}
+            today={today}
+            onView={setCalView}
+            onAnchor={setAnchor}
+            onTrip={(id) => setView({ kind: "trip", id })}
+            onBooking={(id) => setView({ kind: "booking", id })}
+          />
           <TripRail trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={(id) => setView({ kind: "trip", id })} />
         </section>
       ) : (
