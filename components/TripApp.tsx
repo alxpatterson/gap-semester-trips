@@ -11,7 +11,7 @@ import { MonthGrid, MONTH_RANGE, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
 import { BookingForm, TripForm, type BookingInput, type TripInput } from "./Forms";
 import InstallHint from "./InstallHint";
-import { NoPlan, SetupNeeded, SignIn } from "./SignIn";
+import { NotInvited, SetupNeeded, SignIn } from "./SignIn";
 import { Sheet, useToast } from "./ui";
 
 type View =
@@ -66,8 +66,6 @@ function PlanLoader({ sb, email }: { sb: SupabaseClient; email: string }) {
       return undefined;
     }
   });
-  const [nonce, setNonce] = useState(0);
-
   useEffect(() => {
     let cancelled = false;
     sb.from("plan_members")
@@ -87,10 +85,10 @@ function PlanLoader({ sb, email }: { sb: SupabaseClient; email: string }) {
     return () => {
       cancelled = true;
     };
-  }, [sb, email, nonce]);
+  }, [sb, email]);
 
   if (planId === undefined) return null;
-  if (planId === null) return <NoPlan sb={sb} email={email} onCreated={() => setNonce((n) => n + 1)} />;
+  if (planId === null) return <NotInvited sb={sb} email={email} />;
   return <PlanView sb={sb} planId={planId} email={email} />;
 }
 

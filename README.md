@@ -26,9 +26,12 @@ A shared trip planner for the January–May 2027 gap semester: a trip calendar, 
 
 ## 3. First sign-in
 
-1. Open the site, enter your email, and click the link that arrives.
-2. Choose **Start a plan**. You're the owner.
-3. Open **People** and add your girlfriend's email. She signs in with that email and sees the same plan; changes show up for both of you live.
+This app holds exactly one plan, the 2027 gap semester. It is created once in the SQL Editor (not from the app) with Alex as its owner, and `0002_single_plan.sql` removes any way to create another.
+
+1. Open the site, enter your email, and click the link that arrives. You land straight in the plan.
+2. Open **People** and add your girlfriend's email. She signs in with that email and sees the same plan; changes show up for both of you live.
+
+Anyone else who signs in sees a "This planner is private" message and no data.
 
 ## 4. Put it on your phone
 

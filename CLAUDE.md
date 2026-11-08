@@ -13,6 +13,9 @@ Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 
 - Pure logic lives in `lib/logic.ts`; components stay thin.
 - Offline: `public/sw.js` caches the app shell; `TripApp.tsx` keeps the last loaded data in localStorage and disables editing while offline.
 
+## Scope
+- Single-purpose: one plan (the 2027 gap semester), owned by Alex, shared with people he adds under People. Don't add plan creation, onboarding or multi-plan features unless asked.
+
 ## Domain rules
 - Booking `type` → filter category: stay → Stays; flight/train/bus → Transport; food → Food; activity → Events; other → Other.
 - Budget = plan.budget_usd minus the cost of bookings that are `booked` and `counts_in_budget`. Cost is Alex's own share in USD (group bookings are split).

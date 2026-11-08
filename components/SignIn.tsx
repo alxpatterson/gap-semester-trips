@@ -59,39 +59,17 @@ export function SetupNeeded() {
   );
 }
 
-export function NoPlan({ sb, email, onCreated }: { sb: SupabaseClient; email: string; onCreated: () => void }) {
-  const [name, setName] = useState("Gap semester 2027");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+/** Shown to anyone who signs in with an email that isn't on the gap semester plan. */
+export function NotInvited({ sb, email }: { sb: SupabaseClient; email: string }) {
   return (
     <main className="center">
       <div className="card">
-        <h1>No plan yet</h1>
+        <h1>This planner is private</h1>
         <p>
-          You&apos;re signed in as <strong>{email}</strong>, but this email isn&apos;t on a trip plan. If someone invited you, ask them to add this
-          exact email under People. Or start your own plan.
+          You&apos;re signed in as <strong>{email}</strong>, which isn&apos;t on the gap semester plan. Ask Alex to add this exact email under
+          People, then sign in again.
         </p>
-        <form
-          className="f"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            const { error } = await sb.rpc("create_plan", { plan_name: name });
-            setBusy(false);
-            if (error) setError(error.message);
-            else onCreated();
-          }}
-        >
-          <label>
-            Plan name
-            <input id="plan-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
-          </label>
-          {error && <p style={{ color: "var(--bad)" }}>{error}</p>}
-          <button className="btn primary" disabled={busy}>
-            {busy ? "Creating…" : "Start a plan"}
-          </button>
-        </form>
-        <button className="btn ghost" onClick={() => sb.auth.signOut()}>
+        <button className="btn" onClick={() => sb.auth.signOut()}>
           Sign out
         </button>
       </div>
