@@ -329,14 +329,12 @@ export function TripRail({
             <li key={t.id}>
               <button className={`trip-item k-${t.kind} ${past ? "past" : ""}`} onClick={() => onTrip(t.id)}>
                 <span className="sw" />
-                <span style={{ minWidth: 0 }}>
-                  <div className="t">{t.title}</div>
-                  <div className="d">
-                    {t.start_date ? fmtRange(t.start_date, t.end_date) : "No dates yet"}
-                    {n > 0 && ` · ${n} booking${n > 1 ? "s" : ""}`}
-                  </div>
-                </span>
+                <span className="t">{t.title}</span>
                 <span className={`pill ${t.status}`}>{t.status}</span>
+                <span className="d">
+                  {t.start_date ? fmtRange(t.start_date, t.end_date) : "No dates yet"}
+                  {n > 0 && ` · ${n} booking${n > 1 ? "s" : ""}`}
+                </span>
               </button>
             </li>
           );

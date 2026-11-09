@@ -102,7 +102,7 @@ a { color: var(--link); }
 .b-cat b { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* Calendar */
-.cal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 24px; align-items: start; }
+.cal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 268px; gap: 20px; align-items: start; }
 @media (max-width: 900px) { .cal-layout { grid-template-columns: minmax(0, 1fr); } }
 .panel { background: var(--surface); border: 0; border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 22px; min-width: 0; }
 .monthbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -209,11 +209,11 @@ a { color: var(--link); }
 
 .rail h3 { font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: -.02em; margin: 0 0 10px; }
 .trip-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.trip-item { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 6px; border-radius: var(--r-md); border: 0; background: transparent; text-align: left; width: 100%; }
+.trip-item { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; column-gap: 10px; row-gap: 1px; align-items: center; padding: 8px 6px; border-radius: var(--r-md); border: 0; background: transparent; text-align: left; width: 100%; }
 .trip-item:hover { background: var(--soft); }
-.trip-item .sw { width: 6px; align-self: stretch; border-radius: 1px; background: var(--kc); }
+.trip-item .sw { width: 6px; grid-row: 1 / -1; align-self: stretch; border-radius: 1px; background: var(--kc); }
 .trip-item .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.trip-item .d { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.trip-item .d { grid-column: 2 / -1; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .trip-item.past { opacity: .55; }
 .pill { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: var(--r-sm); white-space: nowrap; }
 .pill.idea { background: var(--soft); color: var(--muted); }
