@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
-import { initialAnchor, localToday, maxSchengenWindow, MONTHS, type CalView } from "@/lib/logic";
-import type { Booking, Category, Plan, SyncStatus, Trip } from "@/lib/types";
+import { canEditPlan, initialAnchor, localToday, maxSchengenWindow, MONTHS, type CalView } from "@/lib/logic";
+import type { Booking, Category, MemberRole, Plan, SyncStatus, Trip } from "@/lib/types";
 import BudgetPanel from "./BudgetPanel";
 import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
 import { CalendarPanel, TripRail } from "./Calendar";
@@ -71,20 +71,31 @@ function PlanLoader({ sb, email }: { sb: SupabaseClient; email: string }) {
       return undefined;
     }
   });
+  const [role, setRole] = useState<MemberRole | null>(() => {
+    try {
+      return (localStorage.getItem("gst:role") as MemberRole | null) ?? null;
+    } catch {
+      return null;
+    }
+  });
   useEffect(() => {
     let cancelled = false;
     sb.from("plan_members")
-      .select("plan_id")
+      .select("plan_id,role")
       .ilike("email", email)
       .limit(1)
       .then(({ data, error }) => {
         if (cancelled) return;
-        if (error) return; // Offline: keep the cached plan id, if any.
+        if (error) return; // Offline: keep the cached plan id and role, if any.
         const id = data?.[0]?.plan_id ?? null;
+        const r = (data?.[0]?.role as MemberRole | undefined) ?? null;
         setPlanId(id);
+        setRole(r);
         try {
           if (id) localStorage.setItem("gst:plan", id);
           else localStorage.removeItem("gst:plan");
+          if (r) localStorage.setItem("gst:role", r);
+          else localStorage.removeItem("gst:role");
         } catch {}
       });
     return () => {
@@ -94,10 +105,10 @@ function PlanLoader({ sb, email }: { sb: SupabaseClient; email: string }) {
 
   if (planId === undefined) return null;
   if (planId === null) return <NotInvited sb={sb} email={email} />;
-  return <PlanView sb={sb} planId={planId} email={email} />;
+  return <PlanView sb={sb} planId={planId} email={email} role={role} />;
 }
 
-function PlanView({ sb, planId, email }: { sb: SupabaseClient; planId: string; email: string }) {
+function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: string; email: string; role: MemberRole | null }) {
   const cached = useMemo(() => readCache(planId), [planId]);
   const [plan, setPlan] = useState<Plan | null>(cached?.plan ?? null);
   const [trips, setTrips] = useState<Trip[]>(cached?.trips ?? []);
@@ -172,7 +183,7 @@ function PlanView({ sb, planId, email }: { sb: SupabaseClient; planId: string; e
     };
   }, [sb, planId, load]);
 
-  const canEdit = online && !stale;
+  const canEdit = canEditPlan(role, online, !!stale);
   const schengen = maxSchengenWindow(trips);
 
   // ---------- Writes ----------
@@ -287,7 +298,7 @@ function PlanView({ sb, planId, email }: { sb: SupabaseClient; planId: string; e
   } else if (view?.kind === "people") {
     sheet = (
       <Sheet title="People" onClose={() => setView(null)}>
-        <People sb={sb} planId={planId} email={email} toast={toast} />
+        <People sb={sb} planId={planId} email={email} role={role} toast={toast} />
       </Sheet>
     );
   }
@@ -372,9 +383,22 @@ function PlanView({ sb, planId, email }: { sb: SupabaseClient; planId: string; e
   );
 }
 
-function People({ sb, planId, email, toast }: { sb: SupabaseClient; planId: string; email: string; toast: (m: string) => void }) {
+function People({
+  sb,
+  planId,
+  email,
+  role,
+  toast,
+}: {
+  sb: SupabaseClient;
+  planId: string;
+  email: string;
+  role: MemberRole | null;
+  toast: (m: string) => void;
+}) {
   const [members, setMembers] = useState<{ email: string; role: string }[] | null>(null);
   const [invite, setInvite] = useState("");
+  const [inviteRole, setInviteRole] = useState<Exclude<MemberRole, "owner">>("viewer");
   const [busy, setBusy] = useState(false);
   const [changing, setChanging] = useState(false);
 
@@ -386,22 +410,51 @@ function People({ sb, planId, email, toast }: { sb: SupabaseClient; planId: stri
     load();
   }, [load]);
 
-  const isOwner = members?.some((m) => m.role === "owner" && m.email.toLowerCase() === email.toLowerCase());
+  const isOwner = role === "owner";
+
+  const setRole = async (memberEmail: string, next: Exclude<MemberRole, "owner">) => {
+    setBusy(true);
+    const { error } = await sb.rpc("set_plan_member_role", { p: planId, member_email: memberEmail, member_role: next });
+    setBusy(false);
+    if (error) return toast(`Couldn't change: ${error.message}`);
+    toast(`${memberEmail} is now ${next === "viewer" ? "view only" : "an editor"}`);
+    load();
+  };
 
   return (
     <>
       <p className="empty" style={{ padding: 0 }}>
-        Everyone here can see and edit this plan. Each person also needs an account with a password, created in Supabase → Authentication →
-        Users → Add user.
+        Editors can change trips, bookings and the budget. Viewers see everything but can&apos;t change anything. Each person also needs an
+        account with a password, created in Supabase → Authentication → Users → Add user.
       </p>
+      {role === "viewer" && <p className="empty" style={{ padding: 0 }}>You have view-only access to this plan.</p>}
       <ul className="people">
         {members === null && <li>Loading…</li>}
-        {members?.map((m) => (
-          <li key={m.email}>
-            <span>{m.email}</span>
-            <span className="pill idea">{m.role}</span>
-          </li>
-        ))}
+        {members?.map((m) => {
+          const self = m.email.toLowerCase() === email.toLowerCase();
+          return (
+            <li key={m.email}>
+              <span>
+                {m.email}
+                {self && " (you)"}
+              </span>
+              {isOwner && m.role !== "owner" ? (
+                <select
+                  aria-label={`Access for ${m.email}`}
+                  className="role"
+                  value={m.role}
+                  disabled={busy}
+                  onChange={(e) => setRole(m.email, e.target.value as Exclude<MemberRole, "owner">)}
+                >
+                  <option value="viewer">View only</option>
+                  <option value="editor">Can edit</option>
+                </select>
+              ) : (
+                <span className="pill idea">{m.role === "viewer" ? "view only" : m.role}</span>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {isOwner && (
         <form
@@ -409,10 +462,10 @@ function People({ sb, planId, email, toast }: { sb: SupabaseClient; planId: stri
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
-            const { error } = await sb.rpc("add_plan_member", { p: planId, member_email: invite });
+            const { error } = await sb.rpc("add_plan_member", { p: planId, member_email: invite, member_role: inviteRole });
             setBusy(false);
             if (error) return toast(`Couldn't add: ${error.message}`);
-            toast(`Added ${invite}`);
+            toast(`Added ${invite} as ${inviteRole === "viewer" ? "view only" : "an editor"}`);
             setInvite("");
             load();
           }}
@@ -420,6 +473,13 @@ function People({ sb, planId, email, toast }: { sb: SupabaseClient; planId: stri
           <label>
             Add someone by email
             <input id="invite-email" type="email" required value={invite} onChange={(e) => setInvite(e.target.value)} />
+          </label>
+          <label>
+            Access
+            <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Exclude<MemberRole, "owner">)}>
+              <option value="viewer">View only</option>
+              <option value="editor">Can edit</option>
+            </select>
           </label>
           <button className="btn primary" disabled={busy}>
             {busy ? "Adding…" : "Add to plan"}

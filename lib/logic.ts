@@ -1,4 +1,4 @@
-import type { Booking, BookingType, Category, Trip, TripKind } from "./types";
+import type { Booking, BookingType, Category, MemberRole, Trip, TripKind } from "./types";
 
 // ---------- Labels ----------
 export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -144,6 +144,16 @@ export function bookingsOn<T extends Pick<Booking, "date" | "end_date" | "type" 
   return bookings
     .filter((b) => b.date === day || (b.type === "stay" && !!b.end_date && b.end_date === day && b.date !== day))
     .sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
+}
+
+// ---------- Access ----------
+/**
+ * Whether this person can change anything right now. Viewers never can; everyone else can only
+ * while the app is online and showing live data rather than the offline copy.
+ * Row-level security enforces the same rule server-side — this just keeps the controls honest.
+ */
+export function canEditPlan(role: MemberRole | null, online: boolean, stale: boolean) {
+  return role !== null && role !== "viewer" && online && !stale;
 }
 
 // ---------- Schengen ----------

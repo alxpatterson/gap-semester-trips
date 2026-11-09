@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bookingsOn,
   budgetSummary,
+  canEditPlan,
   categoryOf,
   fmtRange,
   inPlanRange,
@@ -134,5 +135,22 @@ describe("calendar views", () => {
     expect(bookingsOn([stay, flight], "2027-02-10").map((b) => b.id)).toEqual(["f", "s"]);
     expect(bookingsOn([stay, flight], "2027-02-12").map((b) => b.id)).toEqual(["s"]);
     expect(bookingsOn([stay, flight], "2027-02-11")).toEqual([]);
+  });
+});
+
+describe("canEditPlan", () => {
+  it("lets the owner and editors edit while online and live", () => {
+    expect(canEditPlan("owner", true, false)).toBe(true);
+    expect(canEditPlan("editor", true, false)).toBe(true);
+  });
+  it("never lets a viewer edit", () => {
+    expect(canEditPlan("viewer", true, false)).toBe(false);
+  });
+  it("still blocks editing offline or on a stale copy", () => {
+    expect(canEditPlan("owner", false, false)).toBe(false);
+    expect(canEditPlan("editor", true, true)).toBe(false);
+  });
+  it("blocks editing when the role isn't known yet", () => {
+    expect(canEditPlan(null, true, false)).toBe(false);
   });
 });

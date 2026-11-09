@@ -1,3 +1,4 @@
+export type MemberRole = "owner" | "editor" | "viewer";
 export type TripKind = "base" | "weekend" | "travel" | "other";
 export type TripStatus = "idea" | "planned" | "booked";
 export type BookingType = "stay" | "flight" | "train" | "bus" | "food" | "activity" | "other";

@@ -13,7 +13,7 @@ Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 
 
 ## Stack and structure
 - Next.js App Router, React 19, TypeScript, plain CSS (`app/globals.css`). No UI library; keep it that way unless asked.
-- Supabase via `@supabase/supabase-js`, browser-only client in `lib/supabase.ts`. Email + password sign-in (public sign-ups disabled in Supabase; accounts are created in the dashboard). Data access is protected by row-level security on `plan_members` (see `supabase/migrations/0001_init.sql`). Schema changes go in a new numbered migration file, never by editing 0001.
+- Supabase via `@supabase/supabase-js`, browser-only client in `lib/supabase.ts`. Email + password sign-in (public sign-ups disabled in Supabase; accounts are created in the dashboard). Data access is protected by row-level security on `plan_members` (see `supabase/migrations/0001_init.sql`). Members are `owner`, `editor` or `viewer`: reads go through `is_plan_member`, every write through `can_edit_plan`, so a viewer is blocked server-side as well as in the UI (`canEditPlan` in `lib/logic.ts` gates the controls). Schema changes go in a new numbered migration file, never by editing 0001.
 - Pure logic lives in `lib/logic.ts`; components stay thin.
 - Offline: `public/sw.js` caches the app shell; `TripApp.tsx` keeps the last loaded data in localStorage and disables editing while offline.
 
