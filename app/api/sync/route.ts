@@ -96,6 +96,18 @@ export async function POST(req: Request) {
       }
     }
 
+    // A booking may be filed under any trip that exists, including ones made by hand; an id that
+    // matches nothing is dropped rather than failing the batch, so the booking still lands.
+    const { data: allTrips } = await sb.from("trips").select("id").eq("plan_id", plan.id);
+    const tripIds = new Set((allTrips ?? []).map((t) => t.id as string));
+    let unfiled = 0;
+    for (const b of bookings) {
+      if (b.trip_id && !tripIds.has(b.trip_id)) {
+        b.trip_id = null;
+        unfiled++;
+      }
+    }
+
     let added = 0;
     let updated = 0;
     let skipped = 0;
@@ -148,7 +160,7 @@ export async function POST(req: Request) {
     );
     if (statusError) return json({ error: `Couldn't record the run: ${statusError.message}` }, 500);
 
-    return json({ added, updated, skipped, tripsAdded, review: bookings.filter((b) => b.status === "review").length, remembered: seen.length, limit: MAX_PROCESSED_IDS });
+    return json({ added, updated, skipped, tripsAdded, unfiled, review: bookings.filter((b) => b.status === "review").length, remembered: seen.length, limit: MAX_PROCESSED_IDS });
   } catch (e) {
     return json({ error: e instanceof SyncError ? e.message : "Unexpected error" }, 400);
   }

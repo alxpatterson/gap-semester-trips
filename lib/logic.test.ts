@@ -167,6 +167,12 @@ describe("sync payloads", () => {
     expect(row).toMatchObject({ plan_id: plan, id: "gm-abc123", title: "Ryanair FR2104", cost: 64.01, source: "gmail", created_by: null });
   });
 
+  it("files a booking under a trip made by hand, but won't name one", () => {
+    expect(normalizeBooking({ id: "gm-a", type: "stay", trip_id: "florence" }, plan).trip_id).toBe("florence");
+    expect(normalizeBooking({ id: "gm-a", type: "stay" }, plan).trip_id).toBeNull();
+    expect(() => normalizeBooking({ id: "gm-a", type: "stay", trip_id: "../x" }, plan)).toThrow(SyncError);
+  });
+
   it("refuses ids it could use to touch a hand-made row", () => {
     expect(() => normalizeBooking({ id: "my-own-booking", type: "flight" }, plan)).toThrow(SyncError);
     expect(() => normalizeBooking({ id: "gm-../../etc", type: "flight" }, plan)).toThrow(SyncError);

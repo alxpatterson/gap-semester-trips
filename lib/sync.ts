@@ -51,6 +51,15 @@ const money = (v: unknown, field: string) => {
   return Math.round(n * 100) / 100;
 };
 
+/** An id the sync only points at — an existing trip it is filing a booking under, made by anyone. */
+export const refId = (v: unknown, field: string) => {
+  const id = str(v, 80, field);
+  if (!id) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new SyncError(`${field} may only hold letters, digits, hyphens and underscores`);
+  return id;
+};
+
+/** An id of a row the sync creates: prefixed, so it can never name a row somebody made by hand. */
 export const syncId = (v: unknown, field: string) => {
   const id = str(v, 80, field).toLowerCase();
   if (!id.startsWith(SYNC_ID_PREFIX)) throw new SyncError(`${field} must start with "${SYNC_ID_PREFIX}"`);
@@ -69,7 +78,7 @@ export function normalizeBooking(input: Record<string, unknown>, planId: string)
     title: str(input.title, 100, "title") || "Untitled booking",
     type: oneOf(input.type, BOOKING_TYPES, "type"),
     status: oneOf(input.status ?? "booked", BOOKING_STATUSES, "status"),
-    trip_id: input.trip_id ? syncId(input.trip_id, "trip_id") : null,
+    trip_id: refId(input.trip_id, "trip_id"),
     date: date_,
     end_date: end,
     time: str(input.time, 10, "time"),
