@@ -27,8 +27,10 @@ Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 
 - Bookings synced from Gmail have `source = 'gmail'` and ids `gm-<confirmation code>`; don't change that id scheme, the daily sync relies on it to avoid duplicates.
 
 ## Design
-- Colour tokens are CSS variables on `:root` with a dark-mode override; use tokens, never literal colours in components.
-- Fonts: Bricolage Grotesque (display), IBM Plex Sans (body), IBM Plex Mono (dates, codes, money).
+- Colour tokens are CSS variables on `:root` with a dark-mode override; use tokens, never literal colours in components. Warm neutral ground, near-white cards, one vivid green (`--accent`) for the brand, the base trip and anything booked.
+- Cards carry `--shadow` instead of a border. Radius scale is `--r-sm/--r-md/--r-lg`; nothing is a capsule.
+- Every booking row starts with a `TypeTile` (`components/ui.tsx`): a square icon tile tinted by the booking's category.
+- Fonts: Plus Jakarta Sans throughout (700/800 for headings, tight tracking); IBM Plex Mono only for confirmation codes. Numbers use `font-variant-numeric: tabular-nums` rather than a mono face.
 - Must work at 390px wide with no sideways scroll, and respect safe-area insets (it runs full-screen on iPhone).
 
 ## Don't

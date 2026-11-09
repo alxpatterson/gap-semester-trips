@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { Booking } from "@/lib/types";
+import { categoryOf } from "@/lib/logic";
+import type { Booking, BookingType } from "@/lib/types";
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -91,4 +92,25 @@ export function BookingPill({ status }: { status: Booking["status"] }) {
   if (status === "booked") return <span className="pill booked">Booked</span>;
   if (status === "review") return <span className="pill review">Check</span>;
   return <span className="pill todo">To book</span>;
+}
+
+/** A square icon tile, coloured by the booking's category — the anchor on every booking row. */
+const ICONS: Record<BookingType, string> = {
+  stay: "M3 19v-9M3 14h18v5M7 14v-4h5a3 3 0 0 1 3 3v1",
+  flight: "M21 3 11 13M21 3l-6.5 18-3.5-8-8-3.5L21 3Z",
+  train: "M6 3h12v10a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3zM6 9h12M9.5 21 7 18M14.5 21 17 18",
+  bus: "M4 5h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 10h16M8 21v-3M16 21v-3",
+  food: "M5 3v7a2 2 0 0 0 4 0V3M7 10v11M18 3c-1.6 2-2.5 4-2.5 6.5 0 1.9.8 2.9 2.5 2.9s2.5-1 2.5-2.9C20.5 7 19.6 5 18 3ZM18 12.4V21",
+  activity: "M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4zM12 7v10",
+  other: "M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11ZM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
+};
+
+export function TypeTile({ type }: { type: BookingType }) {
+  return (
+    <span className={`tile c-${categoryOf(type)}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d={ICONS[type]} />
+      </svg>
+    </span>
+  );
 }

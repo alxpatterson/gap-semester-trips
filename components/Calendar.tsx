@@ -22,6 +22,7 @@ import {
   type CalView,
 } from "@/lib/logic";
 import type { Booking, Trip } from "@/lib/types";
+import { TypeTile } from "./ui";
 
 export function CalendarPanel({
   view,
@@ -122,8 +123,7 @@ function Agenda({
           <div key={d} className={`aday ${d === today ? "today" : ""}`}>
             {(!one || where || d === today) && (
               <h3 className="ahead">
-                {!one && <span>{`${DOWS[weekday(d)]}, ${fmtDate(d)}`}</span>}
-                {where && <span>{one ? where : `· ${where}`}</span>}
+                <span>{one ? where : [`${DOWS[weekday(d)]}, ${fmtDate(d)}`, where].filter(Boolean).join(" · ")}</span>
                 {d === today && <span className="pill booked">Today</span>}
               </h3>
             )}
@@ -149,18 +149,18 @@ function Agenda({
               {items.map((b) => {
                 const n = nights(b);
                 const checkout = b.type === "stay" && b.end_date === d && b.date !== d;
-                const meta = [
-                  checkout ? "Check out" : "",
-                  b.provider,
-                  !checkout && n ? `${n} night${n > 1 ? "s" : ""}` : "",
-                  one && Number(b.cost) > 0 ? money(b.cost) : "",
-                ].filter(Boolean);
+                const top = [BOOKING_TYPES[b.type], b.time, b.provider].filter(Boolean).join(" · ");
+                const bottom = [
+                  checkout ? "Check out" : n ? `${fmtRange(b.date, b.end_date)} · ${n} night${n > 1 ? "s" : ""}` : "",
+                  !checkout && Number(b.cost) > 0 ? money(b.cost) : "",
+                ].filter(Boolean).join(" · ");
                 return (
                   <button key={`${b.id}-${checkout ? "out" : "in"}`} className="abook" onClick={() => onBooking(b.id)}>
-                    <span className="tm">{b.time || "—"}</span>
+                    <TypeTile type={b.type} />
                     <span className="n">
                       <span className="ttl">{b.title}</span>
-                      <span className="sub">{[BOOKING_TYPES[b.type], ...meta].join(" · ")}</span>
+                      <span className="sub">{top}</span>
+                      {bottom && <span className="sub">{bottom}</span>}
                     </span>
                     <span className={`pill ${b.status}`}>{b.status}</span>
                   </button>

@@ -1,8 +1,8 @@
 "use client";
 
-import { BOOKING_TYPES, CATEGORIES, categoryOf, fmtRange, money, MONTHS, MONTHS_LONG, nights } from "@/lib/logic";
+import { BOOKING_TYPES, CATEGORIES, categoryOf, fmtRange, money, MONTHS_LONG, nights } from "@/lib/logic";
 import type { Booking, BookingStatus, Category, Trip } from "@/lib/types";
-import { BookingPill, CopyCode } from "./ui";
+import { BookingPill, CopyCode, TypeTile } from "./ui";
 
 export type StatusFilter = "all" | Exclude<BookingStatus, "review">;
 export type CategoryFilter = "all" | Category;
@@ -87,12 +87,11 @@ export default function Bookings({
             {g.items.map((b) => {
               const trip = trips.find((t) => t.id === b.trip_id);
               const n = nights(b);
-              const meta = [
-                n ? `${fmtRange(b.date, b.end_date)}, ${n} night${n > 1 ? "s" : ""}` : "",
+              const top = [BOOKING_TYPES[b.type], b.time, b.provider, b.source === "gmail" ? "From Gmail" : ""].filter(Boolean).join(" · ");
+              const bottom = [
+                n ? `${fmtRange(b.date, b.end_date)} · ${n} night${n > 1 ? "s" : ""}` : fmtRange(b.date, b.end_date) || "No date yet",
                 trip?.title,
-                b.provider,
-                b.source === "gmail" ? "From Gmail" : "",
-              ].filter(Boolean);
+              ].filter(Boolean).join(" · ");
               return (
                 <div
                   key={b.id}
@@ -102,15 +101,11 @@ export default function Bookings({
                   onClick={() => onOpen(b.id)}
                   onKeyDown={(e) => e.key === "Enter" && onOpen(b.id)}
                 >
-                  <div className="when">
-                    <span className="m">{b.date ? MONTHS[+b.date.slice(5, 7) - 1] : "—"}</span>
-                    <span className="dd">{b.date ? +b.date.slice(8) : "?"}</span>
-                    {b.time && <span className="tm">{b.time}</span>}
-                  </div>
+                  <TypeTile type={b.type} />
                   <div className="main">
-                    <span className="type">{BOOKING_TYPES[b.type]}</span>
                     <span className="ttl">{b.title}</span>
-                    {meta.length > 0 && <span className="meta">{meta.join(" · ")}</span>}
+                    <span className="meta">{top}</span>
+                    <span className="meta">{bottom}</span>
                   </div>
                   <div className="side">
                     <BookingPill status={b.status} />
