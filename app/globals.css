@@ -44,9 +44,8 @@ a { color: var(--accent); }
 
 /* Header */
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-bottom: 16px; }
-.brand { display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0; }
+.brand { margin-right: auto; min-width: 0; }
 .brand h1 { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
-.brand p { margin: 0; color: var(--muted); font-size: 13px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-md); padding: 5px 11px; font-size: 12.5px; white-space: nowrap; }
 .chip b { font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums; }
