@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { fmtDate, sortTasks, taskGroup, TASK_GROUPS, type TaskGroup } from "@/lib/logic";
+import { fmtDate, openTasks, sortTasks, taskGroup, TASK_GROUPS, type TaskGroup } from "@/lib/logic";
 import type { Task } from "@/lib/types";
 
 export default function Tasks({
@@ -38,7 +38,10 @@ export default function Tasks({
   })).filter((g) => g.items.length > 0 && (g.key !== "done" || showDone));
 
   return (
-    <section>
+    <section className="panel todo-panel" aria-label="To do">
+      <h3>
+        To do{loaded && openTasks(tasks) > 0 && <span className="n"> {openTasks(tasks)}</span>}
+      </h3>
       {canEdit && (
         <form
           className="todo-add"

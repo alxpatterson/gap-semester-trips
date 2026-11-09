@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
-import { canEditPlan, initialAnchor, localToday, maxSchengenWindow, MONTHS, openTasks, type CalView } from "@/lib/logic";
+import { canEditPlan, initialAnchor, localToday, maxSchengenWindow, MONTHS, type CalView } from "@/lib/logic";
 import type { Booking, Category, MemberRole, Plan, SyncStatus, Task, Trip } from "@/lib/types";
 import BudgetPanel, { BudgetChip } from "./BudgetPanel";
 import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
@@ -121,7 +121,7 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
   const [online, setOnline] = useState(true);
 
   const today = localToday();
-  const [tab, setTab] = useState<"cal" | "book" | "todo">("cal");
+  const [tab, setTab] = useState<"home" | "book">("home");
   const [calView, setCalView] = useState<CalView>("month");
   const [anchor, setAnchor] = useState(() => initialAnchor(today));
   const [category, setCategory] = useState<CategoryFilter>("all");
@@ -335,14 +335,11 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
           </span>
         </div>
         <div className="tabs" role="tablist">
-          <button role="tab" aria-selected={tab === "cal"} onClick={() => setTab("cal")}>
-            Calendar
+          <button role="tab" aria-selected={tab === "home"} onClick={() => setTab("home")}>
+            Home
           </button>
           <button role="tab" aria-selected={tab === "book"} onClick={() => setTab("book")}>
             Bookings
-          </button>
-          <button role="tab" aria-selected={tab === "todo"} onClick={() => setTab("todo")}>
-            To do{loaded && openTasks(tasks) > 0 && <span className="n"> {openTasks(tasks)}</span>}
           </button>
         </div>
         <div className="actions">
@@ -364,7 +361,7 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
         </div>
       )}
 
-      {tab === "cal" ? (
+      {tab === "home" ? (
         <section className="cal-layout">
           <CalendarPanel
             view={calView}
@@ -378,19 +375,20 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
             onTrip={(id) => setView({ kind: "trip", id })}
             onBooking={(id) => setView({ kind: "booking", id })}
           />
-          <TripRail trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={(id) => setView({ kind: "trip", id })} />
+          <div className="side">
+            <Tasks
+              tasks={tasks}
+              loaded={loaded}
+              today={today}
+              canEdit={canEdit}
+              saving={saving}
+              onAdd={addTask}
+              onToggle={toggleTask}
+              onDelete={deleteTask}
+            />
+            <TripRail trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={(id) => setView({ kind: "trip", id })} />
+          </div>
         </section>
-      ) : tab === "todo" ? (
-        <Tasks
-          tasks={tasks}
-          loaded={loaded}
-          today={today}
-          canEdit={canEdit}
-          saving={saving}
-          onAdd={addTask}
-          onToggle={toggleTask}
-          onDelete={deleteTask}
-        />
       ) : (
         <>
           {plan && <BudgetPanel plan={plan} bookings={bookings} loaded={loaded} onPickCategory={pickCategory} />}

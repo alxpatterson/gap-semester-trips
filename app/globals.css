@@ -103,6 +103,7 @@ a { color: var(--link); }
 
 /* Calendar */
 .cal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 268px; gap: 20px; align-items: start; }
+.side { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 @media (max-width: 900px) { .cal-layout { grid-template-columns: minmax(0, 1fr); } }
 .panel { background: var(--surface); border: 0; border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 22px; min-width: 0; }
 .monthbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -247,22 +248,26 @@ a { color: var(--link); }
 }
 
 /* To-do list */
-.todo-add { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.todo-panel h3 { font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: -.02em; margin: 0 0 10px; }
+.todo-panel h3 .n { font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.todo-panel .month-label { margin: 14px 0 6px; }
+.todo-panel .empty { padding: 10px 0; }
+.todo-add { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 2px; }
 .todo-add input[type="text"], .todo-add input:not([type]) { flex: 1 1 220px; min-width: 0; }
-.todo-add input { border: 0; box-shadow: var(--shadow-sm); border-radius: var(--r-md); background: var(--surface); color: var(--ink); padding: 10px 12px; font-size: 16px; }
+.todo-add input { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); color: var(--ink); padding: 8px 10px; font-size: 16px; }
 .todo-add input[type="date"] { flex: 0 0 auto; font-size: 14px; color: var(--muted); }
 .todo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.todo li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; background: var(--surface); box-shadow: var(--shadow-sm); border-radius: var(--r-md); padding: 10px 12px; }
+.todo li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; background: var(--soft); border-radius: var(--r-md); padding: 8px 10px; }
 .todo label { display: flex; align-items: center; gap: 10px; min-width: 0; cursor: pointer; }
 .todo input[type="checkbox"] { width: 19px; height: 19px; flex: none; accent-color: var(--accent); cursor: pointer; }
-.todo .t { font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
-.todo .d { font-size: 12.5px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.todo .t { font-size: 13.5px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.todo .d { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .todo li.is-late .d { color: var(--alert); font-weight: 700; }
-.todo li.is-done { box-shadow: none; background: var(--soft); }
+.todo li.is-done { background: transparent; }
 .todo li.is-done .t { text-decoration: line-through; color: var(--muted); font-weight: 500; }
 .todo .x { width: 26px; height: 26px; font-size: 16px; background: transparent; color: var(--muted); }
 .todo .x:hover { background: var(--soft); color: var(--ink); }
-.todo-toggle { margin-top: 14px; }
+.todo-toggle { margin-top: 10px; padding-left: 0; }
 .month-label .n { font-weight: 700; opacity: .6; }
 .tabs .n { font-weight: 700; opacity: .7; font-variant-numeric: tabular-nums; }
 
