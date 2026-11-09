@@ -2,6 +2,10 @@
 
 Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 31 → Florence base ~Jan 5–Mar 15 with weekend trips → solo SE Asia/Australia ~Mar 16–May 28 → home for a June internship). Used by Alex and his girlfriend, mostly on phones while travelling.
 
+## Git
+- Work on `main`: commit there and push straight to `origin/main`, which Vercel deploys. No feature branches and no pull requests unless Alex asks for one.
+- `npm test` and `npm run build` must both pass before every push, since a push is a deploy.
+
 ## Commands
 - `npm run dev` — local dev (needs `.env.local`, see `.env.example`)
 - `npm test` — vitest for `lib/logic.ts`; add a test when changing date, Schengen or budget logic
