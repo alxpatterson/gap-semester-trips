@@ -1,11 +1,14 @@
 /* Layout: itinerary app — budget strip, then a month calendar beside the trip list; bookings as ticket stubs. */
 :root {
-  --bg: #F4F6F2; --surface: #FFFFFF; --ink: #18211C; --muted: #5B6860; --line: #DCE2DA; --soft: #EBEFE8;
-  --accent: #2F5D50; --accent-ink: #FFFFFF;
-  --k-base: #2F5D50; --k-weekend: #B8862B; --k-travel: #3A6AA3; --k-other: #7A847E; --k-event: #8A5A9E;
-  --good: #2E7D4F; --warn: #B7791F; --bad: #B23A35;
+  --bg: #EFEDE9; --surface: #FBFAF8; --ink: #2A1F19; --muted: #655B54; --line: #E3DFD9; --soft: #F3F1ED;
+  --accent: #00804A; --accent-ink: #FFFFFF;
+  --k-base: #00804A; --k-weekend: #B5761F; --k-travel: #35679E; --k-other: #857C74; --k-event: #8A5A9E;
+  --good: #00804A; --warn: #B5761F; --bad: #B23A35;
   /* One tight radius scale: marks, then controls, then the panels that hold them. Nothing is a capsule. */
-  --r-sm: 3px; --r-md: 5px; --r-lg: 8px;
+  --r-sm: 4px; --r-md: 8px; --r-lg: 14px;
+  /* Cards sit on the ground with a shadow rather than a hairline. */
+  --shadow: 0 1px 2px rgba(31, 22, 15, .05), 0 10px 26px -14px rgba(31, 22, 15, .20);
+  --shadow-sm: 0 1px 2px rgba(31, 22, 15, .06);
   --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
   --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -13,10 +16,12 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #111714; --surface: #19201C; --ink: #E5ECE7; --muted: #97A59D; --line: #2B3530; --soft: #202823;
-    --accent: #74B9A1; --accent-ink: #0E1512;
-    --k-base: #74B9A1; --k-weekend: #E2B45F; --k-travel: #83ABDD; --k-other: #9AA59F; --k-event: #C39BD6;
-    --good: #6CC28F; --warn: #E3B05A; --bad: #E57A72;
+    --bg: #15120F; --surface: #1E1A16; --ink: #F1ECE5; --muted: #A79D94; --line: #302A24; --soft: #262019;
+    --accent: #35C184; --accent-ink: #0A1A12;
+    --k-base: #35C184; --k-weekend: #E0AE5C; --k-travel: #83ABDD; --k-other: #A49A91; --k-event: #C39BD6;
+    --good: #35C184; --warn: #E0AE5C; --bad: #E57A72;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 10px 26px -14px rgba(0, 0, 0, .60);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35);
     color-scheme: dark;
   }
 }
@@ -45,7 +50,7 @@ a { color: var(--accent); }
 /* Header */
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-bottom: 16px; }
 .brand { margin-right: auto; min-width: 0; }
-.brand h1 { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+.brand h1 { font-family: var(--display); font-weight: 800; font-size: 28px; letter-spacing: -.025em; margin: 0; text-wrap: balance; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-md); padding: 5px 11px; font-size: 12.5px; white-space: nowrap; }
 .chip b { font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -67,11 +72,11 @@ a { color: var(--accent); }
 .btn.small { padding: 5px 10px; font-size: 13px; }
 .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
 
-.banner { background: var(--soft); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: var(--muted); }
+.banner { background: var(--soft); border: 0; border-radius: var(--r-lg); padding: 12px 15px; margin-bottom: 16px; font-size: 13px; color: var(--muted); }
 .banner.install { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
 
 /* Budget */
-.budget { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+.budget { background: var(--surface); border: 0; box-shadow: var(--shadow); border-radius: var(--r-lg); padding: 16px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
 .b-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 4px 16px; }
 .b-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .b-left { font-family: var(--display); font-weight: 700; font-size: 32px; line-height: 1.1; font-variant-numeric: tabular-nums; }
@@ -88,9 +93,9 @@ a { color: var(--accent); }
 /* Calendar */
 .cal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 24px; align-items: start; }
 @media (max-width: 900px) { .cal-layout { grid-template-columns: minmax(0, 1fr); } }
-.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; min-width: 0; }
+.panel { background: var(--surface); border: 0; border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px; min-width: 0; }
 .monthbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
-.monthbar h2 { font-family: var(--display); font-weight: 500; font-size: 20px; margin: 0 auto 0 0; }
+.monthbar h2 { font-family: var(--display); font-weight: 700; font-size: 21px; letter-spacing: -.02em; margin: 0 auto 0 0; }
 .monthbar .btn { padding: 6px 11px; }
 .monthbar .navs { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; color: var(--muted); font-size: 12px; }
@@ -111,38 +116,36 @@ a { color: var(--accent); }
 .more { font-size: 11px; color: var(--muted); margin-left: 8px; }
 .k-base { --kc: var(--k-base); } .k-weekend { --kc: var(--k-weekend); } .k-travel { --kc: var(--k-travel); } .k-other { --kc: var(--k-other); }
 
-/* Week and day views: a row per day */
-.agenda { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
-.aday { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
-.aday.wknd { background: var(--soft); }
-.ahead { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding-left: 4px; }
-.adow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.adnum { font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.aday.today .adnum, .aday.today .adow { color: var(--accent); }
-.aday.today .adow { font-weight: 600; }
-.abody { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding-right: 4px; }
-.atrip { display: flex; flex-direction: column; gap: 1px; text-align: left; width: 100%; border: 0; border-left: 3px solid var(--kc); border-radius: 0 var(--r-sm) var(--r-sm) 0; padding: 6px 10px; background: color-mix(in srgb, var(--kc) 16%, transparent); }
-.atrip.idea { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--kc) 16%, transparent) 0 6px, transparent 6px 10px); }
-.atrip .t { font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
-.atrip .d { font-family: var(--mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
-.abook { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 8px; align-items: center; text-align: left; width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-md); padding: 7px 10px; }
-.abook:hover { border-color: var(--muted); }
+/* Week and day views: a dated heading, then that day's cards under it */
+.agenda { display: flex; flex-direction: column; gap: 20px; }
+.aday { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ahead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0; font-family: var(--display); font-weight: 700; font-size: 16px; letter-spacing: -.015em; }
+.aday.today .ahead { color: var(--accent); }
+.abody { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.actxs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.actx { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; padding: 0; color: var(--muted); font-size: 12.5px; }
+.actx i { width: 8px; height: 8px; border-radius: 1px; background: var(--kc); flex: none; }
+.actx:hover { color: var(--ink); }
+.atrip { display: flex; flex-direction: column; gap: 1px; text-align: left; width: 100%; border: 0; border-left: 3px solid var(--kc); border-radius: 0 var(--r-md) var(--r-md) 0; padding: 9px 12px; background: color-mix(in srgb, var(--kc) 14%, transparent); }
+.atrip.idea { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--kc) 14%, transparent) 0 6px, transparent 6px 10px); }
+.atrip .t { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.atrip .d { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.abook { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; width: 100%; border: 0; background: var(--soft); border-radius: var(--r-md); padding: 10px 12px; }
+.abook:hover { background: color-mix(in srgb, var(--ink) 7%, var(--soft)); }
 .abook .tm { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.abook .n { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.abook .ttl { font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
-.abook .sub { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.anone { color: var(--muted); font-size: 12.5px; padding: 3px 2px; }
-.agenda.one .aday { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 0; }
-.agenda.one .ahead { flex-direction: row; align-items: baseline; gap: 8px; }
-.agenda.one .adnum { font-size: 24px; }
+.abook .n { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.abook .ttl { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.abook .sub { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.anone { color: var(--muted); font-size: 12.5px; }
+.agenda.one { gap: 10px; }
+.agenda.one .ahead { font-size: 18px; }
 .agenda.one .atrip .t, .agenda.one .abook .ttl { font-size: 15px; }
 @media (max-width: 420px) {
-  .aday { grid-template-columns: 44px minmax(0, 1fr); gap: 8px; }
-  .abook { grid-template-columns: 42px minmax(0, 1fr); row-gap: 4px; }
+  .abook { grid-template-columns: 42px minmax(0, 1fr); row-gap: 6px; }
   .abook .pill { grid-column: 2; justify-self: start; }
 }
 
-.rail h3 { font-family: var(--display); font-weight: 500; font-size: 17px; margin: 0 0 10px; }
+.rail h3 { font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: -.02em; margin: 0 0 10px; }
 .trip-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .trip-item { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 6px; border-radius: var(--r-md); border: 0; background: transparent; text-align: left; width: 100%; }
 .trip-item:hover { background: var(--soft); }
@@ -150,11 +153,11 @@ a { color: var(--accent); }
 .trip-item .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trip-item .d { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .trip-item.past { opacity: .55; }
-.pill { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: var(--r-sm); white-space: nowrap; }
+.pill { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: var(--r-sm); white-space: nowrap; }
 .pill.idea { background: var(--soft); color: var(--muted); }
 .pill.planned, .pill.todo { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
-.pill.booked { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
-.pill.review { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+.pill.booked { background: var(--good); color: var(--accent-ink); }
+.pill.review { background: var(--bad); color: #FFFFFF; }
 .empty { color: var(--muted); padding: 18px 6px; font-size: 13.5px; }
 .empty strong { color: var(--ink); }
 
@@ -167,8 +170,8 @@ a { color: var(--accent); }
 .filters .n { font-family: var(--mono); font-size: 11.5px; opacity: .7; }
 .month-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
 .tickets { display: flex; flex-direction: column; gap: 10px; }
-.ticket { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; cursor: pointer; text-align: left; padding: 0; width: 100%; }
-.ticket:hover { border-color: var(--muted); }
+.ticket { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; background: var(--surface); border: 0; box-shadow: var(--shadow-sm); border-radius: var(--r-lg); overflow: hidden; cursor: pointer; text-align: left; padding: 0; width: 100%; }
+.ticket:hover { box-shadow: var(--shadow); }
 .ticket .when { padding: 12px 10px; border-right: 1px dashed var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: var(--soft); }
 .ticket .when .m { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .ticket .when .dd { font-family: var(--display); font-size: 24px; font-weight: 700; line-height: 1; }
@@ -215,7 +218,7 @@ a { color: var(--accent); }
 
 /* Sign-in and setup */
 .center { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 24px; width: min(420px, 100%); display: flex; flex-direction: column; gap: 14px; }
+.card { background: var(--surface); border: 0; box-shadow: var(--shadow); border-radius: var(--r-lg); padding: 24px; width: min(420px, 100%); display: flex; flex-direction: column; gap: 14px; }
 .card h1 { font-family: var(--display); font-weight: 700; font-size: 26px; margin: 0; }
 .card p { margin: 0; color: var(--muted); }
 .card code { font-family: var(--mono); font-size: 12.5px; background: var(--soft); padding: 1px 5px; border-radius: var(--r-sm); }

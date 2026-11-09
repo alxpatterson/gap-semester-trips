@@ -6,6 +6,7 @@ import {
   CAL_VIEWS,
   dayNum,
   DOWS,
+  fmtDate,
   fmtRange,
   fromDayNum,
   inPlanRange,
@@ -111,15 +112,33 @@ function Agenda({
       {days.map((d) => {
         const here = tripsOn(trips, d);
         const items = bookingsOn(bookings, d);
+        // "Wed, Oct 21 · Arrive in Kyoto": the day, then whatever starts on it.
+        const arriving = here.find((t) => t.start_date === d);
+        const where = arriving ? `Arrive in ${arriving.place || arriving.title}` : "";
+        // A trip gets a card on the day it starts; on the days after it is just quiet context.
+        const starting = here.filter((t) => t.start_date === d);
+        const ongoing = here.filter((t) => t.start_date !== d);
         return (
-          <div key={d} className={`aday ${d === today ? "today" : ""} ${weekday(d) > 4 ? "wknd" : ""}`}>
-            <div className="ahead">
-              <span className="adow">{d === today && !one ? "Today" : DOWS[weekday(d)]}</span>
-              <span className="adnum">{+d.slice(8)}</span>
-              {one && d === today && <span className="pill booked">Today</span>}
-            </div>
+          <div key={d} className={`aday ${d === today ? "today" : ""}`}>
+            {(!one || where || d === today) && (
+              <h3 className="ahead">
+                {!one && <span>{`${DOWS[weekday(d)]}, ${fmtDate(d)}`}</span>}
+                {where && <span>{one ? where : `· ${where}`}</span>}
+                {d === today && <span className="pill booked">Today</span>}
+              </h3>
+            )}
             <div className="abody">
-              {here.map((t) => (
+              {ongoing.length > 0 && (
+                <div className="actxs">
+                  {ongoing.map((t) => (
+                    <button key={t.id} className={`actx k-${t.kind}`} onClick={() => onTrip(t.id)}>
+                      <i />
+                      {t.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {starting.map((t) => (
                 <button key={t.id} className={`atrip k-${t.kind} ${t.status === "idea" ? "idea" : ""}`} onClick={() => onTrip(t.id)}>
                   <span className="t">{t.title}</span>
                   <span className="d">
