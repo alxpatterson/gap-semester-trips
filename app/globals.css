@@ -246,6 +246,26 @@ a { color: var(--link); }
   .ticket .side { grid-column: 2; flex-direction: row; justify-content: flex-start; align-items: center; flex-wrap: wrap; }
 }
 
+/* To-do list */
+.todo-add { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.todo-add input[type="text"], .todo-add input:not([type]) { flex: 1 1 220px; min-width: 0; }
+.todo-add input { border: 0; box-shadow: var(--shadow-sm); border-radius: var(--r-md); background: var(--surface); color: var(--ink); padding: 10px 12px; font-size: 16px; }
+.todo-add input[type="date"] { flex: 0 0 auto; font-size: 14px; color: var(--muted); }
+.todo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.todo li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; background: var(--surface); box-shadow: var(--shadow-sm); border-radius: var(--r-md); padding: 10px 12px; }
+.todo label { display: flex; align-items: center; gap: 10px; min-width: 0; cursor: pointer; }
+.todo input[type="checkbox"] { width: 19px; height: 19px; flex: none; accent-color: var(--accent); cursor: pointer; }
+.todo .t { font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
+.todo .d { font-size: 12.5px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.todo li.is-late .d { color: var(--alert); font-weight: 700; }
+.todo li.is-done { box-shadow: none; background: var(--soft); }
+.todo li.is-done .t { text-decoration: line-through; color: var(--muted); font-weight: 500; }
+.todo .x { width: 26px; height: 26px; font-size: 16px; background: transparent; color: var(--muted); }
+.todo .x:hover { background: var(--soft); color: var(--ink); }
+.todo-toggle { margin-top: 14px; }
+.month-label .n { font-weight: 700; opacity: .6; }
+.tabs .n { font-weight: 700; opacity: .7; font-variant-numeric: tabular-nums; }
+
 /* Sheet */
 .overlay { position: fixed; inset: 0; background: rgba(10, 14, 12, .45); z-index: 20; border: 0; }
 .sheet { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100%); background: var(--surface); z-index: 21; display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,.18); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-right: env(safe-area-inset-right, 0px); }

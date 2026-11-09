@@ -1,4 +1,4 @@
-import type { Booking, BookingType, Category, MemberRole, Trip, TripKind } from "./types";
+import type { Booking, BookingType, Category, MemberRole, Task, Trip, TripKind } from "./types";
 
 // ---------- Labels ----------
 export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -155,6 +155,40 @@ export function bookingsOn<T extends Pick<Booking, "date" | "end_date" | "type" 
 export function canEditPlan(role: MemberRole | null, online: boolean, stale: boolean) {
   return role !== null && role !== "viewer" && online && !stale;
 }
+
+// ---------- To-do list ----------
+export type TaskGroup = "overdue" | "today" | "soon" | "later" | "someday" | "done";
+
+/** Which bucket a task falls in. Anything dated within a week counts as soon; undated is someday. */
+export function taskGroup(t: Pick<Task, "done" | "due">, today: string): TaskGroup {
+  if (t.done) return "done";
+  if (!t.due) return "someday";
+  if (t.due < today) return "overdue";
+  if (t.due === today) return "today";
+  return dayNum(t.due) - dayNum(today) <= 7 ? "soon" : "later";
+}
+
+export const TASK_GROUPS: [TaskGroup, string][] = [
+  ["overdue", "Overdue"],
+  ["today", "Today"],
+  ["soon", "This week"],
+  ["later", "Later"],
+  ["someday", "No date"],
+  ["done", "Done"],
+];
+
+/** Soonest first, undated last, done at the bottom with the most recently ticked first. */
+export function sortTasks<T extends Pick<Task, "done" | "due" | "title" | "done_at">>(tasks: T[]) {
+  return [...tasks].sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    if (a.done && b.done) return (b.done_at ?? "").localeCompare(a.done_at ?? "");
+    if (a.due !== b.due) return (a.due ?? "9999-99-99").localeCompare(b.due ?? "9999-99-99");
+    return a.title.localeCompare(b.title);
+  });
+}
+
+/** The number on the To do tab: everything still outstanding. */
+export const openTasks = (tasks: Pick<Task, "done">[]) => tasks.filter((t) => !t.done).length;
 
 // ---------- Schengen ----------
 /**

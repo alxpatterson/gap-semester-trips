@@ -8,16 +8,20 @@ import {
   inPlanRange,
   initialAnchor,
   maxSchengenWindow,
+  openTasks,
   nights,
   schengenDays,
   shiftAnchor,
+  sortTasks,
   startOfWeek,
+  taskGroup,
   tripsOn,
   viewDays,
   viewRange,
   viewTitle,
 } from "./logic";
 import { normalizeBooking, processedIds, rowsOf, SyncError, updatableFields } from "./sync";
+import type { Task } from "./types";
 import type { Booking, Trip } from "./types";
 
 const trip = (start: string, end: string, schengen: boolean, kind: "base" | "weekend" | "travel" = "weekend") => ({
@@ -201,5 +205,34 @@ describe("sync payloads", () => {
     expect(() => rowsOf(Array.from({ length: 201 }, () => ({})), "bookings")).toThrow(SyncError);
     expect(() => rowsOf("nope", "bookings")).toThrow(SyncError);
     expect(rowsOf(undefined, "bookings")).toEqual([]);
+  });
+});
+
+describe("to-do list", () => {
+  const today = "2027-02-11";
+  const task = (over: Partial<Task>): Task =>
+    ({ plan_id: "p", id: "t", title: "x", done: false, due: null, trip_id: null, created_by: null, done_at: null, ...over });
+
+  it("sorts a due date into the right bucket", () => {
+    expect(taskGroup(task({ due: "2027-02-09" }), today)).toBe("overdue");
+    expect(taskGroup(task({ due: today }), today)).toBe("today");
+    expect(taskGroup(task({ due: "2027-02-16" }), today)).toBe("soon");
+    expect(taskGroup(task({ due: "2027-02-19" }), today)).toBe("later");
+    expect(taskGroup(task({ due: null }), today)).toBe("someday");
+    expect(taskGroup(task({ due: "2027-02-09", done: true }), today)).toBe("done");
+  });
+
+  it("puts the soonest first, undated last and done at the bottom", () => {
+    const list = [
+      task({ id: "none", due: null }),
+      task({ id: "done", done: true, due: "2027-01-01", done_at: "2027-02-10T10:00:00Z" }),
+      task({ id: "late", due: "2027-02-01" }),
+      task({ id: "soon", due: "2027-02-14" }),
+    ];
+    expect(sortTasks(list).map((t) => t.id)).toEqual(["late", "soon", "none", "done"]);
+  });
+
+  it("counts only what is still outstanding", () => {
+    expect(openTasks([task({ done: false }), task({ done: true }), task({ done: false })])).toBe(2);
   });
 });

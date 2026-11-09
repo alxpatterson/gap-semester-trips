@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
-import { canEditPlan, initialAnchor, localToday, maxSchengenWindow, MONTHS, type CalView } from "@/lib/logic";
-import type { Booking, Category, MemberRole, Plan, SyncStatus, Trip } from "@/lib/types";
+import { canEditPlan, initialAnchor, localToday, maxSchengenWindow, MONTHS, openTasks, type CalView } from "@/lib/logic";
+import type { Booking, Category, MemberRole, Plan, SyncStatus, Task, Trip } from "@/lib/types";
 import BudgetPanel, { BudgetChip } from "./BudgetPanel";
 import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
+import Tasks from "./Tasks";
 import { CalendarPanel, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
 import { BookingForm, TripForm, type BookingInput, type TripInput } from "./Forms";
@@ -22,7 +23,7 @@ type View =
   | { kind: "people" }
   | null;
 
-type Cache = { plan: Plan; trips: Trip[]; bookings: Booking[]; sync: SyncStatus | null; savedAt: string };
+type Cache = { plan: Plan; trips: Trip[]; bookings: Booking[]; tasks: Task[]; sync: SyncStatus | null; savedAt: string };
 
 const cacheKey = (planId: string) => `gst:cache:${planId}`;
 const readCache = (planId: string): Cache | null => {
@@ -113,13 +114,14 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
   const [plan, setPlan] = useState<Plan | null>(cached?.plan ?? null);
   const [trips, setTrips] = useState<Trip[]>(cached?.trips ?? []);
   const [bookings, setBookings] = useState<Booking[]>(cached?.bookings ?? []);
+  const [tasks, setTasks] = useState<Task[]>(cached?.tasks ?? []);
   const [sync, setSync] = useState<SyncStatus | null>(cached?.sync ?? null);
   const [loaded, setLoaded] = useState(!!cached);
   const [stale, setStale] = useState<string | null>(null); // savedAt of the offline copy being shown
   const [online, setOnline] = useState(true);
 
   const today = localToday();
-  const [tab, setTab] = useState<"cal" | "book">("cal");
+  const [tab, setTab] = useState<"cal" | "book" | "todo">("cal");
   const [calView, setCalView] = useState<CalView>("month");
   const [anchor, setAnchor] = useState(() => initialAnchor(today));
   const [category, setCategory] = useState<CategoryFilter>("all");
@@ -129,10 +131,11 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
   const { toast, node: toastNode } = useToast();
 
   const load = useCallback(async () => {
-    const [p, t, b, s] = await Promise.all([
+    const [p, t, b, k, s] = await Promise.all([
       sb.from("plans").select("id,name,budget_usd,budget_note").eq("id", planId).single(),
       sb.from("trips").select("*").eq("plan_id", planId),
       sb.from("bookings").select("*").eq("plan_id", planId),
+      sb.from("tasks").select("*").eq("plan_id", planId),
       sb.from("sync_status").select("plan_id,last_run,added,updated,review,last_error").eq("plan_id", planId).maybeSingle(),
     ]);
     if (p.error || t.error || b.error) {
@@ -144,12 +147,14 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
       plan: p.data as Plan,
       trips: (t.data ?? []) as Trip[],
       bookings: ((b.data ?? []) as Booking[]).map((x) => ({ ...x, cost: Number(x.cost) || 0 })),
+      tasks: (k.data ?? []) as Task[],
       sync: (s.data as SyncStatus | null) ?? null,
       savedAt: new Date().toISOString(),
     };
     setPlan(next.plan);
     setTrips(next.trips);
     setBookings(next.bookings);
+    setTasks(next.tasks);
     setSync(next.sync);
     setStale(null);
     setLoaded(true);
@@ -163,6 +168,7 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
       .channel(`plan-${planId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "trips", filter: `plan_id=eq.${planId}` }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "bookings", filter: `plan_id=eq.${planId}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `plan_id=eq.${planId}` }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "sync_status", filter: `plan_id=eq.${planId}` }, () => load())
       .subscribe();
     const goOnline = () => {
@@ -217,6 +223,17 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
     );
     if (done) setView(id ? { kind: "booking", id } : null);
   };
+
+  const addTask = (title: string, due: string | null) =>
+    run(() => sb.from("tasks").insert({ plan_id: planId, id: crypto.randomUUID(), title, due }), "Added");
+
+  const toggleTask = (t: Task) =>
+    run(
+      () => sb.from("tasks").update({ done: !t.done, done_at: t.done ? null : new Date().toISOString() }).eq("plan_id", planId).eq("id", t.id),
+      t.done ? "Back on the list" : "Ticked off",
+    );
+
+  const deleteTask = (t: Task) => run(() => sb.from("tasks").delete().eq("plan_id", planId).eq("id", t.id), "Deleted");
 
   const remove = async (table: "trips" | "bookings", id: string) => {
     if (await run(() => sb.from(table).delete().eq("plan_id", planId).eq("id", id), "Deleted")) setView(null);
@@ -324,6 +341,9 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
           <button role="tab" aria-selected={tab === "book"} onClick={() => setTab("book")}>
             Bookings
           </button>
+          <button role="tab" aria-selected={tab === "todo"} onClick={() => setTab("todo")}>
+            To do{loaded && openTasks(tasks) > 0 && <span className="n"> {openTasks(tasks)}</span>}
+          </button>
         </div>
         <div className="actions">
           {canEdit && (
@@ -360,6 +380,17 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
           />
           <TripRail trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={(id) => setView({ kind: "trip", id })} />
         </section>
+      ) : tab === "todo" ? (
+        <Tasks
+          tasks={tasks}
+          loaded={loaded}
+          today={today}
+          canEdit={canEdit}
+          saving={saving}
+          onAdd={addTask}
+          onToggle={toggleTask}
+          onDelete={deleteTask}
+        />
       ) : (
         <>
           {plan && <BudgetPanel plan={plan} bookings={bookings} loaded={loaded} onPickCategory={pickCategory} />}

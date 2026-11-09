@@ -47,6 +47,17 @@ export interface Booking {
   created_by: string | null;
 }
 
+export interface Task {
+  plan_id: string;
+  id: string;
+  title: string;
+  done: boolean;
+  due: string | null; // YYYY-MM-DD
+  trip_id: string | null;
+  created_by: string | null;
+  done_at: string | null;
+}
+
 export interface SyncStatus {
   plan_id: string;
   last_run: string | null;
