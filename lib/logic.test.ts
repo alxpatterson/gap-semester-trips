@@ -17,6 +17,7 @@ import {
   viewRange,
   viewTitle,
 } from "./logic";
+import { normalizeBooking, processedIds, rowsOf, SyncError, updatableFields } from "./sync";
 import type { Booking, Trip } from "./types";
 
 const trip = (start: string, end: string, schengen: boolean, kind: "base" | "weekend" | "travel" = "weekend") => ({
@@ -152,5 +153,47 @@ describe("canEditPlan", () => {
   });
   it("blocks editing when the role isn't known yet", () => {
     expect(canEditPlan(null, true, false)).toBe(false);
+  });
+});
+
+describe("sync payloads", () => {
+  const plan = "plan-1";
+
+  it("rebuilds a booking from a whitelist and ignores anything else", () => {
+    const row = normalizeBooking(
+      { id: "GM-ABC123", title: " Ryanair FR2104 ", type: "flight", date: "2027-02-11", time: "07:20", cost: "64.005", plan_id: "somewhere-else", created_by: "someone", source: "hand" },
+      plan,
+    );
+    expect(row).toMatchObject({ plan_id: plan, id: "gm-abc123", title: "Ryanair FR2104", cost: 64.01, source: "gmail", created_by: null });
+  });
+
+  it("refuses ids it could use to touch a hand-made row", () => {
+    expect(() => normalizeBooking({ id: "my-own-booking", type: "flight" }, plan)).toThrow(SyncError);
+    expect(() => normalizeBooking({ id: "gm-../../etc", type: "flight" }, plan)).toThrow(SyncError);
+  });
+
+  it("rejects nonsense fields rather than writing them", () => {
+    expect(() => normalizeBooking({ id: "gm-a", type: "spaceship" }, plan)).toThrow(SyncError);
+    expect(() => normalizeBooking({ id: "gm-a", type: "flight", date: "11/02/2027" }, plan)).toThrow(SyncError);
+    expect(() => normalizeBooking({ id: "gm-a", type: "stay", date: "2027-02-11", end_date: "2027-02-01" }, plan)).toThrow(SyncError);
+    expect(() => normalizeBooking({ id: "gm-a", type: "flight", cost: -5 }, plan)).toThrow(SyncError);
+  });
+
+  it("only offers the movable fields when a booking already exists", () => {
+    const row = normalizeBooking({ id: "gm-a", type: "flight", title: "Later flight", cost: 99, notes: "mine" }, plan);
+    expect(Object.keys(updatableFields(row)).sort()).toEqual(["date", "end_date", "status", "time", "title"]);
+  });
+
+  it("keeps the newest processed ids and drops duplicates", () => {
+    expect(processedIds(["a", "b"], ["b", "c"])).toEqual(["a", "b", "c"]);
+    const many = Array.from({ length: 350 }, (_, i) => `m${i}`);
+    expect(processedIds(many, ["last"]).length).toBe(300);
+    expect(processedIds(many, ["last"]).at(-1)).toBe("last");
+  });
+
+  it("refuses an oversized or malformed batch", () => {
+    expect(() => rowsOf(Array.from({ length: 201 }, () => ({})), "bookings")).toThrow(SyncError);
+    expect(() => rowsOf("nope", "bookings")).toThrow(SyncError);
+    expect(rowsOf(undefined, "bookings")).toEqual([]);
   });
 });
