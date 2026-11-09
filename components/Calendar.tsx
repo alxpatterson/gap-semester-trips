@@ -86,7 +86,7 @@ export function CalendarPanel({
         <span className="k-weekend"><i />Weekend trip</span>
         <span className="k-travel"><i />Travel leg</span>
         <span className="k-other"><i />Other</span>
-        <span>Striped = still an idea</span>
+        <span className="note">Striped = still an idea</span>
       </div>
     </div>
   );

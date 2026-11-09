@@ -65,6 +65,8 @@ a { color: var(--link); }
 .chip .dot { width: 8px; height: 8px; border-radius: 1px; background: var(--good); }
 .chip.warn .dot { background: var(--warn); }
 .chip.bad .dot { background: var(--bad); }
+.b-chip { cursor: pointer; }
+.b-chip:hover { border-color: var(--muted); }
 .tabs { display: inline-flex; background: var(--soft); border-radius: var(--r-md); padding: 3px; gap: 2px; }
 .tabs button { border: 0; background: transparent; padding: 7px 14px; border-radius: var(--r-sm); font-weight: 500; color: var(--muted); }
 .tabs button[aria-selected="true"], .tabs button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
@@ -123,6 +125,28 @@ a { color: var(--link); }
 .bar.e { margin-right: 4px; }
 .bar.idea { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--kc) var(--tint), transparent) 0 7px, transparent 7px 12px); }
 .more { font-size: 11px; color: var(--muted); margin-left: 8px; }
+/* A phone has to fit a six-row month, so the chrome around the grid gets tighter. */
+@media (max-width: 560px) {
+  .panel { padding: 14px; }
+  .monthbar { gap: 6px; margin-bottom: 8px; }
+  .monthbar h2 { font-size: 16px; }
+  .monthbar .btn { padding: 5px 8px; }
+  .monthbar .navs { gap: 4px; }
+  .tabs.seg { padding: 2px; }
+  .tabs.seg button { padding: 5px 7px; font-size: 12px; }
+  /* All seven columns fit the screen rather than scrolling: narrow columns, smaller type. */
+  .grid { min-width: 0; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .dow { font-size: 9.5px; letter-spacing: .04em; padding: 5px 4px; }
+  .cell { min-height: 70px; padding: 3px 0 5px; }
+  .dnum { font-size: 11px; margin-left: 3px; padding: 0 3px; }
+  .bar { font-size: 10px; height: 16px; line-height: 16px; padding: 0 3px; border-left-width: 2px; }
+  .bar.s { margin-left: 2px; }
+  .bar.e { margin-right: 2px; }
+  .more { font-size: 10px; margin-left: 4px; }
+  .legend { gap: 4px 10px; margin-top: 8px; font-size: 11px; }
+  .legend .note { display: none; }
+}
+
 .k-base { --kc: var(--k-base); } .k-weekend { --kc: var(--k-weekend); } .k-travel { --kc: var(--k-travel); } .k-other { --kc: var(--k-other); }
 
 /* Icon tile: the square that anchors every booking row, coloured by category */

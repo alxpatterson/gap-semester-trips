@@ -5,7 +5,7 @@ import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { canEditPlan, initialAnchor, localToday, maxSchengenWindow, MONTHS, type CalView } from "@/lib/logic";
 import type { Booking, Category, MemberRole, Plan, SyncStatus, Trip } from "@/lib/types";
-import BudgetPanel from "./BudgetPanel";
+import BudgetPanel, { BudgetChip } from "./BudgetPanel";
 import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
 import { CalendarPanel, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
@@ -310,6 +310,7 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
           <h1>{plan?.name || "Winter 2027"}</h1>
         </div>
         <div className="chips">
+          {plan && <BudgetChip plan={plan} bookings={bookings} loaded={loaded} onOpen={() => setTab("book")} />}
           {syncChip}
           <span className={`chip ${schengen > 90 ? "bad" : schengen > 80 ? "warn" : ""}`} title="Most planned days inside the Schengen area in any 180-day window (limit 90)">
             <span className="dot" />
@@ -343,8 +344,6 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
         </div>
       )}
 
-      {plan && <BudgetPanel plan={plan} bookings={bookings} loaded={loaded} onPickCategory={pickCategory} />}
-
       {tab === "cal" ? (
         <section className="cal-layout">
           <CalendarPanel
@@ -362,19 +361,22 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
           <TripRail trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={(id) => setView({ kind: "trip", id })} />
         </section>
       ) : (
-        <Bookings
-          bookings={bookings}
-          trips={trips}
-          loaded={loaded}
-          category={category}
-          status={status}
-          canEdit={canEdit}
-          onCategory={setCategory}
-          onStatus={setStatus}
-          onAdd={() => setView({ kind: "booking-form" })}
-          onOpen={(id) => setView({ kind: "booking", id })}
-          toast={toast}
-        />
+        <>
+          {plan && <BudgetPanel plan={plan} bookings={bookings} loaded={loaded} onPickCategory={pickCategory} />}
+          <Bookings
+            bookings={bookings}
+            trips={trips}
+            loaded={loaded}
+            category={category}
+            status={status}
+            canEdit={canEdit}
+            onCategory={setCategory}
+            onStatus={setStatus}
+            onAdd={() => setView({ kind: "booking-form" })}
+            onOpen={(id) => setView({ kind: "booking", id })}
+            toast={toast}
+          />
+        </>
       )}
 
       {sheet}

@@ -11,6 +11,22 @@ export const CATEGORY_COLOR: Record<Category, string> = {
   other: "var(--k-other)",
 };
 
+/** The budget as a single header chip, so the calendar gets the whole screen. */
+export function BudgetChip({ plan, bookings, loaded, onOpen }: { plan: Plan; bookings: Booking[]; loaded: boolean; onOpen: () => void }) {
+  const budget = Number(plan.budget_usd) || 0;
+  const { spent, planned, left } = budgetSummary(bookings, budget);
+  return (
+    <button
+      className={`chip b-chip ${left < 0 ? "bad" : ""}`}
+      onClick={onOpen}
+      title={`${money(spent)} booked of ${money(budget)}${planned > 0 ? ` · ${money(planned)} more planned` : ""}. Tap for the breakdown.`}
+    >
+      <span className="dot" />
+      <b>{loaded ? (left < 0 ? "−" : "") + money(Math.abs(left)) : "—"}</b> left
+    </button>
+  );
+}
+
 export default function BudgetPanel({
   plan,
   bookings,
