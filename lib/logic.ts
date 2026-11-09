@@ -131,7 +131,8 @@ export function viewTitle(view: CalView, anchor: string) {
 }
 
 /** Trips covering a day, base first so the longest-running trip reads as the backdrop. */
-const KIND_ORDER: Record<TripKind, number> = { base: 0, travel: 1, weekend: 2, other: 3 };
+/** Base first, so the longest-running trip reads as the backdrop behind the others. */
+export const KIND_ORDER: Record<TripKind, number> = { base: 0, travel: 1, weekend: 2, other: 3 };
 export function tripsOn<T extends Pick<Trip, "start_date" | "end_date" | "kind">>(trips: T[], day: string) {
   return trips
     .filter((t) => t.start_date && t.start_date <= day && tripEnd(t)! >= day)

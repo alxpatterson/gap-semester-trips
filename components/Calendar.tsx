@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import {
   BOOKING_TYPES,
+  categoryOf,
   bookingsOn,
   CAL_VIEWS,
   dayNum,
@@ -10,6 +13,7 @@ import {
   fmtRange,
   fromDayNum,
   inPlanRange,
+  KIND_ORDER,
   KINDS,
   money,
   nights,
@@ -71,6 +75,8 @@ export function CalendarPanel({
 
       {view === "month" ? (
         <MonthGrid month={anchor.slice(0, 7)} trips={trips} today={today} onTrip={onTrip} />
+      ) : view === "week" ? (
+        <WeekGrid anchor={anchor} trips={trips} bookings={bookings} today={today} onTrip={onTrip} onBooking={onBooking} />
       ) : (
         <Agenda view={view} anchor={anchor} trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={onTrip} onBooking={onBooking} />
       )}
@@ -86,7 +92,7 @@ export function CalendarPanel({
   );
 }
 
-/** Day and week share one layout: a row per day, with the trips covering it and that day's bookings. */
+/** Day view: the day's trips and bookings in one column. */
 function Agenda({
   view,
   anchor,
@@ -173,6 +179,97 @@ function Agenda({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+
+/**
+ * Week: seven columns side by side. Trips run as continuous bars across the top, each in a fixed
+ * lane so a bar lines up across the days it covers, then each day lists its own bookings.
+ */
+function WeekGrid({
+  anchor,
+  trips,
+  bookings,
+  today,
+  onTrip,
+  onBooking,
+}: {
+  anchor: string;
+  trips: Trip[];
+  bookings: Booking[];
+  today: string;
+  onTrip: (id: string) => void;
+  onBooking: (id: string) => void;
+}) {
+  const days = viewDays("week", anchor);
+  // On a narrow screen only the first few columns fit, so bring the current day into view.
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = scroller.current;
+    if (!box || box.scrollWidth <= box.clientWidth) return;
+    const col = box.querySelector<HTMLElement>(".wcell.today") ?? box.querySelector<HTMLElement>(".wcell");
+    if (!col) return;
+    box.scrollLeft = Math.max(0, Math.min(col.offsetLeft - 8, box.scrollWidth - box.clientWidth));
+  }, [anchor, today]);
+  const from = dayNum(days[0]);
+  const to = dayNum(days[6]);
+  const lanes = trips
+    .filter((t) => t.start_date && dayNum(t.start_date) <= to && dayNum(tripEnd(t)!) >= from)
+    .map((t) => ({ t, a: dayNum(t.start_date!), b: dayNum(tripEnd(t)!) }))
+    .sort((p, q) => KIND_ORDER[p.t.kind] - KIND_ORDER[q.t.kind] || p.a - q.a);
+
+  return (
+    <div className="scroller" ref={scroller}>
+      <div className="wgrid">
+        {days.map((d) => (
+          <div key={`h-${d}`} className={`wdow ${d === today ? "today" : ""}`}>
+            <span>{DOWS[weekday(d)]}</span>
+            <b>{+d.slice(8)}</b>
+          </div>
+        ))}
+        {days.map((d) => {
+          const n = dayNum(d);
+          const col = weekday(d);
+          const items = bookingsOn(bookings, d);
+          return (
+            <div key={d} className={`wcell ${d === today ? "today" : ""}`}>
+              {lanes.map(({ t, a, b }) =>
+                a <= n && n <= b ? (
+                  <button
+                    key={t.id}
+                    className={`bar k-${t.kind} ${t.status === "idea" ? "idea" : ""} ${n === a ? "s" : ""} ${n === b || col === 6 ? "e" : ""} ${
+                      n === a || col === 0 ? "" : "cont"
+                    }`}
+                    title={`${t.title} · ${fmtRange(t.start_date, t.end_date)}`}
+                    onClick={() => onTrip(t.id)}
+                  >
+                    {/* Repeated per column so a scrolled phone still names the bar; hidden once the whole week fits. */}
+                    <span className="lbl">{t.title}</span>
+                  </button>
+                ) : (
+                  <span key={t.id} className="bar gap" aria-hidden="true" />
+                ),
+              )}
+              {items.map((b) => {
+                const checkout = b.type === "stay" && b.end_date === d && b.date !== d;
+                return (
+                  <button
+                    key={`${b.id}-${checkout ? "out" : "in"}`}
+                    className={`wbk c-${categoryOf(b.type)}`}
+                    title={`${b.title} · ${BOOKING_TYPES[b.type]}`}
+                    onClick={() => onBooking(b.id)}
+                  >
+                    {b.time && <span className="tm">{b.time}</span>}
+                    <span className="n">{checkout ? `${b.title} · out` : b.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
