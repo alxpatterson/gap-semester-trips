@@ -33,7 +33,7 @@ export function SignIn({ sb }: { sb: SupabaseClient }) {
   return (
     <main className="center">
       <div className="card">
-        <h1>Gap Semester Trips</h1>
+        <h1>Winter 2027</h1>
         {mode === "sent" && (
           <>
             <p>

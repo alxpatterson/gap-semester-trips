@@ -3,7 +3,7 @@ import "./globals.css";
 import RegisterServiceWorker from "@/components/RegisterServiceWorker";
 
 export const metadata: Metadata = {
-  title: "Gap Semester Trips",
+  title: "Winter 2027",
   description: "Trips, bookings, budget and Schengen days for the 2027 gap semester.",
   applicationName: "Trips",
   appleWebApp: { capable: true, title: "Trips", statusBarStyle: "default" },

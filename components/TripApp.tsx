@@ -296,7 +296,7 @@ function PlanView({ sb, planId, email }: { sb: SupabaseClient; planId: string; e
     <div className="wrap">
       <header className="top">
         <div className="brand">
-          <h1>{plan?.name || "Gap Semester Trips"}</h1>
+          <h1>{plan?.name || "Winter 2027"}</h1>
           <p>Florence, then solo travel · Jan to May 2027</p>
         </div>
         <div className="chips">

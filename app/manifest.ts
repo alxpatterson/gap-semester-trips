@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Gap Semester Trips",
+    name: "Winter 2027",
     short_name: "Trips",
     description: "Trips, bookings, budget and Schengen days for the 2027 gap semester.",
     start_url: "/",
