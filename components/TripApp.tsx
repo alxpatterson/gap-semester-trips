@@ -109,7 +109,7 @@ function PlanView({ sb, planId, email }: { sb: SupabaseClient; planId: string; e
 
   const today = localToday();
   const [tab, setTab] = useState<"cal" | "book">("cal");
-  const [calView, setCalView] = useState<CalView>("week");
+  const [calView, setCalView] = useState<CalView>("month");
   const [anchor, setAnchor] = useState(() => initialAnchor(today));
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");

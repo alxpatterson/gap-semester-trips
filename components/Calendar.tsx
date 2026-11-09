@@ -78,7 +78,7 @@ export function CalendarPanel({
       ) : view === "week" ? (
         <WeekGrid anchor={anchor} trips={trips} bookings={bookings} today={today} onTrip={onTrip} onBooking={onBooking} />
       ) : (
-        <Agenda view={view} anchor={anchor} trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={onTrip} onBooking={onBooking} />
+        <DayView anchor={anchor} trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={onTrip} onBooking={onBooking} />
       )}
 
       <div className="legend">
@@ -92,9 +92,8 @@ export function CalendarPanel({
   );
 }
 
-/** Day view: the day's trips and bookings in one column. */
-function Agenda({
-  view,
+/** Day view: where you are, then what's booked — kept as two separate sections. */
+function DayView({
   anchor,
   trips,
   bookings,
@@ -103,7 +102,6 @@ function Agenda({
   onTrip,
   onBooking,
 }: {
-  view: CalView;
   anchor: string;
   trips: Trip[];
   bookings: Booking[];
@@ -112,77 +110,50 @@ function Agenda({
   onTrip: (id: string) => void;
   onBooking: (id: string) => void;
 }) {
-  const days = viewDays(view, anchor);
-  const one = view === "day";
+  const here = tripsOn(trips, anchor);
+  const items = bookingsOn(bookings, anchor);
   return (
-    <div className={`agenda ${one ? "one" : ""}`}>
-      {days.map((d) => {
-        const here = tripsOn(trips, d);
-        const items = bookingsOn(bookings, d);
-        // "Wed, Oct 21 · Arrive in Kyoto": the day, then whatever starts on it.
-        const arriving = here.find((t) => t.start_date === d);
-        const where = arriving ? `Arrive in ${arriving.place || arriving.title}` : "";
-        // A trip gets a card on the day it starts; on the days after it is just quiet context.
-        const starting = here.filter((t) => t.start_date === d);
-        const ongoing = here.filter((t) => t.start_date !== d);
-        return (
-          <div key={d} className={`aday ${d === today ? "today" : ""}`}>
-            {(!one || where || d === today) && (
-              <h3 className="ahead">
-                <span>{one ? where : [`${DOWS[weekday(d)]}, ${fmtDate(d)}`, where].filter(Boolean).join(" · ")}</span>
-                {d === today && <span className="pill booked">Today</span>}
-              </h3>
-            )}
-            <div className="abody">
-              {ongoing.length > 0 && (
-                <div className="actxs">
-                  {ongoing.map((t) => (
-                    <button key={t.id} className={`actx k-${t.kind}`} onClick={() => onTrip(t.id)}>
-                      <i />
-                      {t.title}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {starting.map((t) => (
-                <button key={t.id} className={`atrip k-${t.kind} ${t.status === "idea" ? "idea" : ""}`} onClick={() => onTrip(t.id)}>
-                  <span className="t">{t.title}</span>
-                  <span className="d">
-                    {[t.place || KINDS[t.kind], fmtRange(t.start_date, t.end_date)].filter(Boolean).join(" · ")}
-                  </span>
-                </button>
-              ))}
-              {items.map((b) => {
-                const n = nights(b);
-                const checkout = b.type === "stay" && b.end_date === d && b.date !== d;
-                const top = [BOOKING_TYPES[b.type], b.time, b.provider].filter(Boolean).join(" · ");
-                const bottom = [
-                  checkout ? "Check out" : n ? `${fmtRange(b.date, b.end_date)} · ${n} night${n > 1 ? "s" : ""}` : "",
-                  !checkout && Number(b.cost) > 0 ? money(b.cost) : "",
-                ].filter(Boolean).join(" · ");
-                return (
-                  <button key={`${b.id}-${checkout ? "out" : "in"}`} className="abook" onClick={() => onBooking(b.id)}>
-                    <TypeTile type={b.type} />
-                    <span className="n">
-                      <span className="ttl">{b.title}</span>
-                      <span className="sub">{top}</span>
-                      {bottom && <span className="sub">{bottom}</span>}
-                    </span>
-                    <span className={`pill ${b.status}`}>{b.status}</span>
-                  </button>
-                );
-              })}
-              {here.length === 0 && items.length === 0 && (
-                <span className="anone">{loaded ? (one ? "Nothing planned for this day." : "Nothing planned") : "…"}</span>
-              )}
-            </div>
-          </div>
-        );
-      })}
+    <div className={`agenda ${anchor === today ? "today" : ""}`}>
+      <section className="asec place">
+        <h3 className="asec-t">Where you are</h3>
+        {here.length === 0 && <p className="anone">{loaded ? "No trip covers this day." : "…"}</p>}
+        {here.map((t) => (
+          <button key={t.id} className={`atrip k-${t.kind} ${t.status === "idea" ? "idea" : ""}`} onClick={() => onTrip(t.id)}>
+            <span className="t">{t.start_date === anchor ? `Arrive in ${t.place || t.title}` : t.title}</span>
+            <span className="d">{[t.place || KINDS[t.kind], fmtRange(t.start_date, t.end_date)].filter(Boolean).join(" · ")}</span>
+          </button>
+        ))}
+      </section>
+
+      <section className="asec">
+        <h3 className="asec-t">Itinerary</h3>
+        {items.length === 0 && <p className="anone">{loaded ? "Nothing booked for this day." : "…"}</p>}
+        {items.map((b) => {
+          const n = nights(b);
+          const checkout = b.type === "stay" && b.end_date === anchor && b.date !== anchor;
+          const top = [BOOKING_TYPES[b.type], b.time, b.provider].filter(Boolean).join(" · ");
+          const bottom = [
+            checkout ? "Check out" : n ? `${fmtRange(b.date, b.end_date)} · ${n} night${n > 1 ? "s" : ""}` : "",
+            !checkout && Number(b.cost) > 0 ? money(b.cost) : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <button key={`${b.id}-${checkout ? "out" : "in"}`} className="abook" onClick={() => onBooking(b.id)}>
+              <TypeTile type={b.type} />
+              <span className="n">
+                <span className="ttl">{b.title}</span>
+                <span className="sub">{top}</span>
+                {bottom && <span className="sub">{bottom}</span>}
+              </span>
+              <span className={`pill ${b.status}`}>{b.status}</span>
+            </button>
+          );
+        })}
+      </section>
     </div>
   );
 }
-
 
 /**
  * Week: seven columns side by side. Trips run as continuous bars across the top, each in a fixed
@@ -229,29 +200,36 @@ function WeekGrid({
             <b>{+d.slice(8)}</b>
           </div>
         ))}
+        {lanes.length > 0 &&
+          days.map((d) => {
+            const n = dayNum(d);
+            const col = weekday(d);
+            return (
+              <div key={`p-${d}`} className={`wplace ${d === today ? "today" : ""}`}>
+                {lanes.map(({ t, a, b }) =>
+                  a <= n && n <= b ? (
+                    <button
+                      key={t.id}
+                      className={`bar k-${t.kind} ${t.status === "idea" ? "idea" : ""} ${n === a ? "s" : ""} ${n === b || col === 6 ? "e" : ""} ${
+                        n === a || col === 0 ? "" : "cont"
+                      }`}
+                      title={`${t.title} · ${fmtRange(t.start_date, t.end_date)}`}
+                      onClick={() => onTrip(t.id)}
+                    >
+                      {/* Repeated per column so a scrolled phone still names the bar; hidden once the whole week fits. */}
+                      <span className="lbl">{t.title}</span>
+                    </button>
+                  ) : (
+                    <span key={t.id} className="bar gap" aria-hidden="true" />
+                  ),
+                )}
+              </div>
+            );
+          })}
         {days.map((d) => {
-          const n = dayNum(d);
-          const col = weekday(d);
           const items = bookingsOn(bookings, d);
           return (
             <div key={d} className={`wcell ${d === today ? "today" : ""}`}>
-              {lanes.map(({ t, a, b }) =>
-                a <= n && n <= b ? (
-                  <button
-                    key={t.id}
-                    className={`bar k-${t.kind} ${t.status === "idea" ? "idea" : ""} ${n === a ? "s" : ""} ${n === b || col === 6 ? "e" : ""} ${
-                      n === a || col === 0 ? "" : "cont"
-                    }`}
-                    title={`${t.title} · ${fmtRange(t.start_date, t.end_date)}`}
-                    onClick={() => onTrip(t.id)}
-                  >
-                    {/* Repeated per column so a scrolled phone still names the bar; hidden once the whole week fits. */}
-                    <span className="lbl">{t.title}</span>
-                  </button>
-                ) : (
-                  <span key={t.id} className="bar gap" aria-hidden="true" />
-                ),
-              )}
               {items.map((b) => {
                 const checkout = b.type === "stay" && b.end_date === d && b.date !== d;
                 return (

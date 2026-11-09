@@ -138,18 +138,23 @@ a { color: var(--link); }
 .wdow b { font-family: var(--display); font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
 .wdow.today b { background: var(--accent); color: var(--accent-ink); border-radius: var(--r-sm); padding: 0 6px; }
 .wdow.today span { color: var(--link); }
-.wcell { display: flex; flex-direction: column; gap: 3px; min-height: 150px; min-width: 0; padding: 5px 0 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.wplace { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 5px 0; background: var(--soft); border-right: 1px solid var(--line); border-bottom: 2px solid var(--line); }
+.wplace.today { background: color-mix(in srgb, var(--accent) 16%, var(--soft)); }
+.wcell { display: flex; flex-direction: column; gap: 3px; min-height: 130px; min-width: 0; padding: 5px 0 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .wcell.today { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .bar.gap { background: none; pointer-events: none; }
-.wcell .bar .lbl { display: block; overflow: hidden; text-overflow: ellipsis; }
-@media (min-width: 640px) { .wcell .bar.cont .lbl { visibility: hidden; } }
+.wplace .bar .lbl { display: block; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 640px) { .wplace .bar.cont .lbl { visibility: hidden; } }
 .wbk { display: block; text-align: left; border: 0; margin: 2px 4px 0; width: calc(100% - 8px); padding: 4px 6px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--kc) var(--tint), transparent); color: var(--ink); font-size: 11.5px; line-height: 1.3; }
 .wbk .tm { display: block; font-weight: 700; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--kc) 40%, var(--ink)); }
 .wbk .n { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wbk:hover .n { white-space: normal; overflow-wrap: anywhere; }
 
 /* Day view: a dated heading, then that day's cards under it */
-.agenda { display: flex; flex-direction: column; gap: 14px; }
+.agenda { display: flex; flex-direction: column; gap: 20px; }
+.asec { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.asec.place { padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.asec-t { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .aday { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .ahead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0; font-family: var(--display); font-weight: 700; font-size: 16px; letter-spacing: -.015em; }
 .aday.today .ahead { color: var(--link); }
