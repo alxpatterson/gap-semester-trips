@@ -26,16 +26,14 @@ export default function BudgetPanel({
   const { byCategory, spent, planned, left } = budgetSummary(bookings, budget);
   return (
     <section className="budget" aria-label="Budget">
-      <div className="b-top">
-        <div>
-          <div className="b-label">Budget left</div>
-          <div className={`b-left ${left < 0 ? "neg" : ""}`}>{loaded ? (left < 0 ? "−" : "") + money(Math.abs(left)) : "—"}</div>
-        </div>
-        <div className="b-of">
-          {money(spent)} booked of {money(budget)}
-          {planned > 0 && ` · ${money(planned)} more planned`}
+      <div className="b-head">
+        <span className="b-label">Budget left</span>
+        <span className={`b-left ${left < 0 ? "neg" : ""}`}>{loaded ? (left < 0 ? "−" : "") + money(Math.abs(left)) : "—"}</span>
+        <span className="b-of" title={`${money(spent)} booked of ${money(budget)}`}>
+          of {money(budget)}
+          {planned > 0 && ` · ${money(planned)} planned`}
           {plan.budget_note && ` · ${plan.budget_note}`}
-        </div>
+        </span>
       </div>
       <div className="b-bar">
         {(Object.entries(byCategory) as [Category, number][])
