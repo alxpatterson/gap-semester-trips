@@ -382,7 +382,7 @@ function PlanView({
         <div className="chips">
           {plan && <BudgetChip plan={plan} bookings={bookings} loaded={loaded} onOpen={() => setTab("book")} />}
           {syncChip}
-          {plan?.track_schengen && (
+          {trips.some((t) => t.schengen) && (
             <span className={`chip ${schengen > 90 ? "bad" : schengen > 80 ? "warn" : ""}`} title="Most planned days inside the Schengen area in any 180-day window (limit 90)">
               <span className="dot" />
               Schengen <b>{loaded ? schengen : "–"}</b> / 90 days
@@ -521,7 +521,6 @@ function PlanSettings({
             budget_usd: Number(f.get("budget")) || 0,
             currency: String(f.get("currency") ?? "USD"),
             budget_note: String(f.get("budget_note") ?? "").trim(),
-            track_schengen: f.get("track_schengen") === "on",
           })
           .eq("id", plan.id);
         setBusy(false);
@@ -564,10 +563,6 @@ function PlanSettings({
       <label>
         Budget note
         <input name="budget_note" maxLength={60} defaultValue={plan.budget_note} placeholder="excludes rent" />
-      </label>
-      <label className="check">
-        <input name="track_schengen" type="checkbox" defaultChecked={plan.track_schengen} />
-        Count Schengen days
       </label>
       <div className="row-actions">
         <button className="btn primary" disabled={busy}>

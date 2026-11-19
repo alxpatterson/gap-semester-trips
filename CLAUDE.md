@@ -21,7 +21,7 @@ Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 
 
 ## Scope
 - Multi-tenant since 0007: anyone can make an account, and an invite code (`invite_codes`, redeemed by `create_plan_with_invite`) buys one trip of their own. A person owns at most one plan but can be a member of others' — the header shows a picker only when they belong to more than one.
-- Nothing about one trip is hardcoded any more: dates, budget, currency and the Schengen counter are columns on `plans`, edited under Trip settings. `planRange()` falls back to a year around today when a plan has no dates. Keep it that way — no Florence, no 2027, no USD in the code.
+- Nothing about one trip is hardcoded any more: dates, budget and currency are columns on `plans`, edited under Trip settings. The Schengen chip isn't a setting — it appears by itself once any trip on the plan is marked `schengen`, so a trip outside Europe never shows it. (`plans.track_schengen` survives from 0007 and is unused.) `planRange()` falls back to a year around today when a plan has no dates. Keep it that way — no Florence, no 2027, no USD in the code.
 - The Gmail sync is Alex's alone: it reaches the app through `/api/sync` with a shared secret and writes to the plan named by `SYNC_PLAN_ID` (required once more than one plan exists). Friends have no sync.
 
 ## Domain rules

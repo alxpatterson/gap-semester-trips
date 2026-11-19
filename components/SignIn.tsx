@@ -222,7 +222,6 @@ export function Onboarding({ sb, email, onCreated }: { sb: SupabaseClient; email
   const [ends, setEnds] = useState("");
   const [budget, setBudget] = useState("");
   const [currency, setCurrency] = useState("USD");
-  const [schengen, setSchengen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -237,7 +236,7 @@ export function Onboarding({ sb, email, onCreated }: { sb: SupabaseClient; email
       ends: ends || null,
       budget: Number(budget) || 0,
       curr: currency,
-      schengen,
+      schengen: true,
     });
     setBusy(false);
     if (error) return setError(error.message);
@@ -287,10 +286,6 @@ export function Onboarding({ sb, email, onCreated }: { sb: SupabaseClient; email
               </select>
             </label>
           </div>
-          <label className="check">
-            <input id="ob-schengen" type="checkbox" checked={schengen} onChange={(e) => setSchengen(e.target.checked)} />
-            Count my Schengen days (Europe&rsquo;s 90-in-180 rule)
-          </label>
           {error && <p style={{ color: "var(--alert)" }}>{error}</p>}
           <button className="btn primary" disabled={busy}>
             {busy ? "Setting up…" : "Create my trip"}
