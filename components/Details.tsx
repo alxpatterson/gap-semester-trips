@@ -78,6 +78,7 @@ export function TripDetail({
 export function BookingDetail({
   booking,
   trip,
+  currency,
   canEdit,
   toast,
   onEdit,
@@ -85,6 +86,7 @@ export function BookingDetail({
 }: {
   booking: Booking;
   trip?: Trip;
+  currency: string;
   canEdit: boolean;
   toast: (m: string) => void;
   onEdit: () => void;
@@ -126,7 +128,7 @@ export function BookingDetail({
           <>
             <dt>Cost</dt>
             <dd className="mono">
-              {money(b.cost)}
+              {money(b.cost, currency)}
               {!b.counts_in_budget && " · not counted in budget"}
             </dd>
           </>

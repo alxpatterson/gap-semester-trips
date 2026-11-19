@@ -13,14 +13,16 @@ Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 
 
 ## Stack and structure
 - Next.js App Router, React 19, TypeScript, plain CSS (`app/globals.css`). No UI library; keep it that way unless asked.
-- Supabase via `@supabase/supabase-js`, browser-only client in `lib/supabase.ts`. Email + password sign-in (public sign-ups disabled in Supabase; accounts are created in the dashboard). Data access is protected by row-level security on `plan_members` (see `supabase/migrations/0001_init.sql`). Members are `owner`, `editor` or `viewer`: reads go through `is_plan_member`, every write through `can_edit_plan`, so a viewer is blocked server-side as well as in the UI (`canEditPlan` in `lib/logic.ts` gates the controls). Schema changes go in a new numbered migration file, never by editing 0001.
+- Supabase via `@supabase/supabase-js`, browser-only client in `lib/supabase.ts`. Email + password sign-in, open sign-up (enable it in Supabase → Authentication → Sign In / Providers); an account with no plan lands on `Onboarding`. Data access is protected by row-level security on `plan_members` (see `supabase/migrations/0001_init.sql`). Members are `owner`, `editor` or `viewer`: reads go through `is_plan_member`, every write through `can_edit_plan`, so a viewer is blocked server-side as well as in the UI (`canEditPlan` in `lib/logic.ts` gates the controls). Schema changes go in a new numbered migration file, never by editing 0001.
 - Pure logic lives in `lib/logic.ts`; components stay thin.
 - To-do list: `tasks` table (0006), in the Home sidebar above All trips (the two tabs are Home and Bookings). Bucketed by due date with `taskGroup`; viewers can read it but can't tick anything, same `can_edit_plan` rule as the rest.
 - Gmail sync: a daily scheduled Claude session reads Gmail and POSTs to `app/api/sync/route.ts`, which writes with the Supabase service key. The route, not the prompt, is the guard: it only inserts rows whose id starts with `gm-`, and on an existing row changes only `SYNC_UPDATABLE` and only when `source = 'gmail'`, so hand-edited bookings are safe. Needs `SYNC_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_URL` set on Vercel (never `NEXT_PUBLIC_*`).
 - Offline: `public/sw.js` caches the app shell; `TripApp.tsx` keeps the last loaded data in localStorage and disables editing while offline.
 
 ## Scope
-- Single-purpose: one plan (the 2027 gap semester), owned by Alex, shared with people he adds under People. Don't add plan creation, onboarding or multi-plan features unless asked.
+- Multi-tenant since 0007: anyone can make an account, and an invite code (`invite_codes`, redeemed by `create_plan_with_invite`) buys one trip of their own. A person owns at most one plan but can be a member of others' — the header shows a picker only when they belong to more than one.
+- Nothing about one trip is hardcoded any more: dates, budget, currency and the Schengen counter are columns on `plans`, edited under Trip settings. `planRange()` falls back to a year around today when a plan has no dates. Keep it that way — no Florence, no 2027, no USD in the code.
+- The Gmail sync is Alex's alone: it reaches the app through `/api/sync` with a shared secret and writes to the plan named by `SYNC_PLAN_ID` (required once more than one plan exists). Friends have no sync.
 
 ## Domain rules
 - Booking `type` → filter category: stay → Stays; flight/train/bus → Transport; food → Food; activity → Events; other → Other.

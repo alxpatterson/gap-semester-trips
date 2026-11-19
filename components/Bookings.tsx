@@ -11,6 +11,7 @@ export default function Bookings({
   bookings,
   trips,
   loaded,
+  currency,
   category,
   status,
   canEdit,
@@ -23,6 +24,7 @@ export default function Bookings({
   bookings: Booking[];
   trips: Trip[];
   loaded: boolean;
+  currency: string;
   category: CategoryFilter;
   status: StatusFilter;
   canEdit: boolean;
@@ -110,7 +112,7 @@ export default function Bookings({
                   <div className="side">
                     <BookingPill status={b.status} />
                     {b.confirmation && <CopyCode code={b.confirmation} toast={toast} />}
-                    {Number(b.cost) > 0 && <span className="cost">{money(b.cost)}</span>}
+                    {Number(b.cost) > 0 && <span className="cost">{money(b.cost, currency)}</span>}
                   </div>
                 </div>
               );

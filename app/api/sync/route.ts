@@ -33,11 +33,24 @@ function admin(): SupabaseClient | null {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-/** This app holds exactly one plan (see 0002_single_plan.sql); refuse to guess if that ever changes. */
-async function onlyPlan(sb: SupabaseClient) {
+/**
+ * Which plan the Gmail sync writes to. Other people have their own plans now, so this must never
+ * guess: SYNC_PLAN_ID names it, and the only case left where guessing is safe is a database with
+ * exactly one plan in it.
+ */
+async function syncPlan(sb: SupabaseClient) {
+  const pinned = process.env.SYNC_PLAN_ID;
+  if (pinned) {
+    const { data, error } = await sb.from("plans").select("id,budget_usd").eq("id", pinned).maybeSingle();
+    if (error) throw new SyncError(`Couldn't read the plan: ${error.message}`);
+    if (!data) throw new SyncError("SYNC_PLAN_ID doesn't match any plan");
+    return data as { id: string; budget_usd: number };
+  }
   const { data, error } = await sb.from("plans").select("id,budget_usd").limit(2);
   if (error) throw new SyncError(`Couldn't read the plan: ${error.message}`);
-  if (!data || data.length !== 1) throw new SyncError(`Expected exactly one plan, found ${data?.length ?? 0}`);
+  if (!data || data.length !== 1) {
+    throw new SyncError(`There are ${data?.length ?? 0} plans — set SYNC_PLAN_ID to say which one the sync writes to`);
+  }
   return data[0] as { id: string; budget_usd: number };
 }
 
@@ -47,7 +60,7 @@ export async function GET(req: Request) {
   const sb = admin();
   if (!sb) return json({ error: "Server is missing SUPABASE_SERVICE_ROLE_KEY" }, 500);
   try {
-    const plan = await onlyPlan(sb);
+    const plan = await syncPlan(sb);
     const [trips, bookings, status] = await Promise.all([
       sb.from("trips").select("id,title,kind,status,start_date,end_date,place,schengen").eq("plan_id", plan.id),
       sb.from("bookings").select("id,title,type,status,date,end_date,trip_id,source").eq("plan_id", plan.id),
@@ -79,7 +92,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const plan = await onlyPlan(sb);
+    const plan = await syncPlan(sb);
     const trips = rowsOf(body.trips, "trips").map((t) => normalizeTrip(t, plan.id));
     const bookings = rowsOf(body.bookings, "bookings").map((b) => normalizeBooking(b, plan.id));
 

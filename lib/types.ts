@@ -8,8 +8,12 @@ export type Category = "stays" | "transport" | "food" | "events" | "other";
 export interface Plan {
   id: string;
   name: string;
-  budget_usd: number;
+  budget_usd: number; // the budget, in the plan's own currency — the column name predates currencies
   budget_note: string;
+  start_date: string | null; // YYYY-MM-DD, the first day the calendar will show
+  end_date: string | null;
+  currency: string; // ISO code, e.g. "USD", "EUR"
+  track_schengen: boolean;
 }
 
 export interface Trip {

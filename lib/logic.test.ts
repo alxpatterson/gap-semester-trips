@@ -8,7 +8,9 @@ import {
   inPlanRange,
   initialAnchor,
   maxSchengenWindow,
+  money,
   openTasks,
+  planRange,
   nights,
   schengenDays,
   shiftAnchor,
@@ -108,16 +110,37 @@ describe("calendar views", () => {
   });
 
   it("stops navigating once a view leaves the plan window", () => {
-    expect(inPlanRange("month", "2026-12-01")).toBe(true);
-    expect(inPlanRange("month", "2026-11-30")).toBe(false);
-    expect(inPlanRange("week", "2026-11-30")).toBe(true); // that week still reaches Dec 1
-    expect(inPlanRange("day", "2027-07-01")).toBe(false);
+    const range = { start: "2026-12-01", end: "2027-06-30" };
+    expect(inPlanRange("month", "2026-12-01", range)).toBe(true);
+    expect(inPlanRange("month", "2026-11-30", range)).toBe(false);
+    expect(inPlanRange("week", "2026-11-30", range)).toBe(true); // that week still reaches Dec 1
+    expect(inPlanRange("day", "2027-07-01", range)).toBe(false);
   });
 
-  it("opens on today during the semester and on its first day otherwise", () => {
-    expect(initialAnchor("2027-02-10")).toBe("2027-02-10");
-    expect(initialAnchor("2026-11-08")).toBe("2026-12-31");
-    expect(initialAnchor("2027-08-01")).toBe("2026-12-31");
+  it("opens on today during the trip and on its first day otherwise", () => {
+    const range = { start: "2026-12-01", end: "2027-06-30" };
+    expect(initialAnchor("2027-02-10", range)).toBe("2027-02-10");
+    expect(initialAnchor("2026-11-08", range)).toBe("2026-12-01");
+    expect(initialAnchor("2027-08-01", range)).toBe("2026-12-01");
+  });
+
+  it("gives a plan with no dates a window around today, and rights a reversed one", () => {
+    expect(planRange({ start_date: "2027-01-05", end_date: "2027-03-15" }, "2026-11-19")).toEqual({
+      start: "2027-01-05",
+      end: "2027-03-15",
+    });
+    expect(planRange(null, "2026-11-19")).toEqual({ start: "2026-10-20", end: "2027-11-19" });
+    expect(planRange({ start_date: "2027-05-01", end_date: "2027-01-01" }, "2026-11-19")).toEqual({
+      start: "2027-05-01",
+      end: "2027-05-01",
+    });
+  });
+
+  it("shows money in the plan's own currency", () => {
+    expect(money(1240)).toBe("$1,240");
+    expect(money(980, "EUR")).toBe("€980");
+    expect(money(0, "GBP")).toBe("£0");
+    expect(money(500, "NOPE")).toBe("500 NOPE"); // an unknown code still reads sensibly
   });
 
   it("titles each view", () => {

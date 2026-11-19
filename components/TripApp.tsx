@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
-import { canEditPlan, initialAnchor, localToday, maxSchengenWindow, MONTHS, type CalView } from "@/lib/logic";
+import { canEditPlan, fmtRange, initialAnchor, localToday, maxSchengenWindow, money, MONTHS, planRange, type CalView } from "@/lib/logic";
 import type { Booking, Category, MemberRole, Plan, SyncStatus, Task, Trip } from "@/lib/types";
 import BudgetPanel, { BudgetChip } from "./BudgetPanel";
 import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
@@ -12,7 +12,7 @@ import { CalendarPanel, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
 import { BookingForm, TripForm, type BookingInput, type TripInput } from "./Forms";
 import InstallHint from "./InstallHint";
-import { NotInvited, RecoveryScreen, SetPassword, SetupNeeded, SignIn } from "./SignIn";
+import { Onboarding, RecoveryScreen, SetPassword, SetupNeeded, SignIn } from "./SignIn";
 import { Sheet, useToast } from "./ui";
 
 type View =
@@ -79,37 +79,75 @@ function PlanLoader({ sb, email }: { sb: SupabaseClient; email: string }) {
       return null;
     }
   });
+  // Someone can own one trip and be a guest on a friend's, so keep the whole list for the picker.
+  const [memberships, setMemberships] = useState<{ plan_id: string; role: MemberRole; name: string }[]>([]);
+  const [reload, setReload] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     sb.from("plan_members")
-      .select("plan_id,role")
+      .select("plan_id,role,plans(name)")
       .ilike("email", email)
-      .limit(1)
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) return; // Offline: keep the cached plan id and role, if any.
-        const id = data?.[0]?.plan_id ?? null;
-        const r = (data?.[0]?.role as MemberRole | undefined) ?? null;
-        setPlanId(id);
-        setRole(r);
+        const rows = (data ?? []).map((r) => ({
+          plan_id: r.plan_id as string,
+          role: r.role as MemberRole,
+          name: ((r.plans as { name?: string } | null)?.name ?? "Trip") as string,
+        }));
+        // Your own trip first, so that's what opens.
+        rows.sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
+        setMemberships(rows);
+        let chosen = rows.find((r) => r.plan_id === localStorage.getItem("gst:plan")) ?? rows[0];
+        setPlanId(chosen?.plan_id ?? null);
+        setRole(chosen?.role ?? null);
         try {
-          if (id) localStorage.setItem("gst:plan", id);
-          else localStorage.removeItem("gst:plan");
-          if (r) localStorage.setItem("gst:role", r);
-          else localStorage.removeItem("gst:role");
+          if (chosen) {
+            localStorage.setItem("gst:plan", chosen.plan_id);
+            localStorage.setItem("gst:role", chosen.role);
+          } else {
+            localStorage.removeItem("gst:plan");
+            localStorage.removeItem("gst:role");
+          }
         } catch {}
       });
     return () => {
       cancelled = true;
     };
-  }, [sb, email]);
+  }, [sb, email, reload]);
+
+  const pick = (id: string) => {
+    const m = memberships.find((x) => x.plan_id === id);
+    if (!m) return;
+    setPlanId(m.plan_id);
+    setRole(m.role);
+    try {
+      localStorage.setItem("gst:plan", m.plan_id);
+      localStorage.setItem("gst:role", m.role);
+    } catch {}
+  };
 
   if (planId === undefined) return null;
-  if (planId === null) return <NotInvited sb={sb} email={email} />;
-  return <PlanView sb={sb} planId={planId} email={email} role={role} />;
+  if (planId === null) return <Onboarding sb={sb} email={email} onCreated={() => setReload((n) => n + 1)} />;
+  return <PlanView sb={sb} planId={planId} email={email} role={role} memberships={memberships} onPickPlan={pick} />;
 }
 
-function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: string; email: string; role: MemberRole | null }) {
+function PlanView({
+  sb,
+  planId,
+  email,
+  role,
+  memberships,
+  onPickPlan,
+}: {
+  sb: SupabaseClient;
+  planId: string;
+  email: string;
+  role: MemberRole | null;
+  memberships: { plan_id: string; role: MemberRole; name: string }[];
+  onPickPlan: (id: string) => void;
+}) {
   const cached = useMemo(() => readCache(planId), [planId]);
   const [plan, setPlan] = useState<Plan | null>(cached?.plan ?? null);
   const [trips, setTrips] = useState<Trip[]>(cached?.trips ?? []);
@@ -123,7 +161,7 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
   const today = localToday();
   const [tab, setTab] = useState<"home" | "book">("home");
   const [calView, setCalView] = useState<CalView>("month");
-  const [anchor, setAnchor] = useState(() => initialAnchor(today));
+  const [anchor, setAnchor] = useState<string | null>(null);
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [view, setView] = useState<View>(null);
@@ -132,7 +170,7 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
 
   const load = useCallback(async () => {
     const [p, t, b, k, s] = await Promise.all([
-      sb.from("plans").select("id,name,budget_usd,budget_note").eq("id", planId).single(),
+      sb.from("plans").select("id,name,budget_usd,budget_note,start_date,end_date,currency,track_schengen").eq("id", planId).single(),
       sb.from("trips").select("*").eq("plan_id", planId),
       sb.from("bookings").select("*").eq("plan_id", planId),
       sb.from("tasks").select("*").eq("plan_id", planId),
@@ -189,6 +227,9 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
     };
   }, [sb, planId, load]);
 
+  const range = useMemo(() => planRange(plan, today), [plan, today]);
+  // The window isn't known until the plan loads, so settle the opening day once it is.
+  const day = anchor ?? initialAnchor(today, range);
   const canEdit = canEditPlan(role, online, !!stale);
   const schengen = maxSchengenWindow(trips);
 
@@ -287,6 +328,7 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
           <BookingDetail
             booking={booking}
             trip={trips.find((t) => t.id === booking.trip_id)}
+            currency={plan?.currency ?? "USD"}
             canEdit={canEdit}
             toast={toast}
             onEdit={() => setView({ kind: "booking-form", booking })}
@@ -314,7 +356,8 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
     );
   } else if (view?.kind === "people") {
     sheet = (
-      <Sheet title="People" onClose={() => setView(null)}>
+      <Sheet title="Trip settings" onClose={() => setView(null)}>
+        <PlanSettings sb={sb} plan={plan} canEdit={canEdit} onSaved={load} toast={toast} />
         <People sb={sb} planId={planId} email={email} role={role} toast={toast} />
       </Sheet>
     );
@@ -324,15 +367,27 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
     <div className="wrap">
       <header className="top">
         <div className="brand">
-          <h1>{plan?.name || "Winter 2027"}</h1>
+          {memberships.length > 1 ? (
+            <select className="plan-pick" aria-label="Which trip" value={planId} onChange={(e) => onPickPlan(e.target.value)}>
+              {memberships.map((m) => (
+                <option key={m.plan_id} value={m.plan_id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <h1>{plan?.name || "Trip planner"}</h1>
+          )}
         </div>
         <div className="chips">
           {plan && <BudgetChip plan={plan} bookings={bookings} loaded={loaded} onOpen={() => setTab("book")} />}
           {syncChip}
-          <span className={`chip ${schengen > 90 ? "bad" : schengen > 80 ? "warn" : ""}`} title="Most planned days inside the Schengen area in any 180-day window (limit 90)">
-            <span className="dot" />
-            Schengen <b>{loaded ? schengen : "–"}</b> / 90 days
-          </span>
+          {plan?.track_schengen && (
+            <span className={`chip ${schengen > 90 ? "bad" : schengen > 80 ? "warn" : ""}`} title="Most planned days inside the Schengen area in any 180-day window (limit 90)">
+              <span className="dot" />
+              Schengen <b>{loaded ? schengen : "–"}</b> / 90 days
+            </span>
+          )}
         </div>
         <div className="tabs" role="tablist">
           <button role="tab" aria-selected={tab === "home"} onClick={() => setTab("home")}>
@@ -349,7 +404,7 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
             </button>
           )}
           <button className="btn" onClick={() => setView({ kind: "people" })}>
-            People
+            Trip
           </button>
         </div>
       </header>
@@ -365,7 +420,9 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
         <section className="cal-layout">
           <CalendarPanel
             view={calView}
-            anchor={anchor}
+            anchor={day}
+            range={range}
+            currency={plan?.currency ?? "USD"}
             trips={trips}
             bookings={bookings}
             loaded={loaded}
@@ -396,6 +453,7 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
             bookings={bookings}
             trips={trips}
             loaded={loaded}
+            currency={plan?.currency ?? "USD"}
             category={category}
             status={status}
             canEdit={canEdit}
@@ -411,6 +469,115 @@ function PlanView({ sb, planId, email, role }: { sb: SupabaseClient; planId: str
       {sheet}
       {toastNode}
     </div>
+  );
+}
+
+
+/** The things that used to be hardcoded: what the trip is called, when it runs, the budget. */
+function PlanSettings({
+  sb,
+  plan,
+  canEdit,
+  onSaved,
+  toast,
+}: {
+  sb: SupabaseClient;
+  plan: Plan | null;
+  canEdit: boolean;
+  onSaved: () => void;
+  toast: (m: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!plan) return null;
+  if (!open)
+    return (
+      <div className="row-actions">
+        <span className="empty" style={{ padding: 0 }}>
+          {plan.name} · {plan.start_date && plan.end_date ? `${fmtRange(plan.start_date, plan.end_date)}` : "no dates set"} ·{" "}
+          {money(Number(plan.budget_usd) || 0, plan.currency)}
+        </span>
+        {canEdit && (
+          <button className="btn small" onClick={() => setOpen(true)}>
+            Edit trip
+          </button>
+        )}
+      </div>
+    );
+
+  return (
+    <form
+      className="f"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget as HTMLFormElement);
+        setBusy(true);
+        const { error } = await sb
+          .from("plans")
+          .update({
+            name: String(f.get("name") ?? "").trim() || plan.name,
+            start_date: String(f.get("start_date") ?? "") || null,
+            end_date: String(f.get("end_date") ?? "") || null,
+            budget_usd: Number(f.get("budget")) || 0,
+            currency: String(f.get("currency") ?? "USD"),
+            budget_note: String(f.get("budget_note") ?? "").trim(),
+            track_schengen: f.get("track_schengen") === "on",
+          })
+          .eq("id", plan.id);
+        setBusy(false);
+        if (error) return toast(`Couldn't save: ${error.message}`);
+        toast("Trip saved");
+        setOpen(false);
+        onSaved();
+      }}
+    >
+      <label>
+        Trip name
+        <input name="name" required maxLength={60} defaultValue={plan.name} />
+      </label>
+      <div className="two">
+        <label>
+          Starts
+          <input name="start_date" type="date" defaultValue={plan.start_date ?? ""} />
+        </label>
+        <label>
+          Ends
+          <input name="end_date" type="date" defaultValue={plan.end_date ?? ""} />
+        </label>
+      </div>
+      <div className="two">
+        <label>
+          Budget
+          <input name="budget" type="number" min={0} step={100} defaultValue={Number(plan.budget_usd) || 0} />
+        </label>
+        <label>
+          Currency
+          <select name="currency" defaultValue={plan.currency || "USD"}>
+            {["USD", "EUR", "GBP", "AUD", "CAD", "JPY", "CHF", "SEK", "NZD", "SGD"].map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label>
+        Budget note
+        <input name="budget_note" maxLength={60} defaultValue={plan.budget_note} placeholder="excludes rent" />
+      </label>
+      <label className="check">
+        <input name="track_schengen" type="checkbox" defaultChecked={plan.track_schengen} />
+        Count Schengen days
+      </label>
+      <div className="row-actions">
+        <button className="btn primary" disabled={busy}>
+          {busy ? "Saving…" : "Save trip"}
+        </button>
+        <button className="btn" type="button" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

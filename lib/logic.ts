@@ -57,7 +57,15 @@ export function nights(b: Pick<Booking, "date" | "end_date">) {
   return b.date && b.end_date && b.end_date > b.date ? dayNum(b.end_date) - dayNum(b.date) : 0;
 }
 
-export const money = (n: number) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
+/** Whole units in the plan's own currency: $1,240 · €980 · ¥45,000. */
+export function money(n: number, currency = "USD") {
+  const amount = Math.round(Number(n) || 0);
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+  } catch {
+    return `${amount.toLocaleString("en-US")} ${currency}`;
+  }
+}
 
 // ---------- Calendar views ----------
 /** Day, week and month are the three ways the calendar tab can be read; week is the default. */
@@ -68,10 +76,18 @@ export const CAL_VIEWS: [CalView, string][] = [
   ["month", "Month"],
 ];
 
-/** The plan's window. The calendar won't navigate past either end of it. */
-export const PLAN_RANGE = ["2026-12-01", "2027-06-30"] as const;
-/** Where the calendar opens when today falls outside the plan: the day the semester starts. */
-export const PLAN_START = "2026-12-31";
+/** The window the calendar can move within — the plan's own dates. */
+export type PlanRange = { start: string; end: string };
+
+/**
+ * A plan with no dates set still needs a window, so fall back to a year around today. Also guards
+ * against a plan whose dates were saved the wrong way round.
+ */
+export function planRange(plan: { start_date?: string | null; end_date?: string | null } | null, today: string): PlanRange {
+  const start = plan?.start_date || addDays(today, -30);
+  const end = plan?.end_date || addDays(today, 365);
+  return end < start ? { start, end: start } : { start, end };
+}
 
 export const addDays = (d: string, n: number) => fromDayNum(dayNum(d) + n);
 /** Monday = 0, Sunday = 6 — the order the grid and the week view use. */
@@ -113,14 +129,14 @@ export function shiftAnchor(view: CalView, anchor: string, delta: number) {
 }
 
 /** Whether a view anchored on this day still shows any part of the plan's window. */
-export function inPlanRange(view: CalView, anchor: string) {
+export function inPlanRange(view: CalView, anchor: string, range: PlanRange) {
   const { start, end } = viewRange(view, anchor);
-  return end >= PLAN_RANGE[0] && start <= PLAN_RANGE[1];
+  return end >= range.start && start <= range.end;
 }
 
-/** The day the calendar opens on: today while the plan is running, otherwise its first day. */
-export function initialAnchor(today: string) {
-  return today >= PLAN_RANGE[0] && today <= PLAN_RANGE[1] ? today : PLAN_START;
+/** The day the calendar opens on: today while the trip is running, otherwise the day it starts. */
+export function initialAnchor(today: string, range: PlanRange) {
+  return today >= range.start && today <= range.end ? today : range.start;
 }
 
 export function viewTitle(view: CalView, anchor: string) {

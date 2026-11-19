@@ -24,6 +24,7 @@ import {
   viewTitle,
   weekday,
   type CalView,
+  type PlanRange,
 } from "@/lib/logic";
 import type { Booking, Trip } from "@/lib/types";
 import { TypeTile } from "./ui";
@@ -31,6 +32,8 @@ import { TypeTile } from "./ui";
 export function CalendarPanel({
   view,
   anchor,
+  range,
+  currency,
   trips,
   bookings,
   loaded,
@@ -42,6 +45,8 @@ export function CalendarPanel({
 }: {
   view: CalView;
   anchor: string;
+  range: PlanRange;
+  currency: string;
   trips: Trip[];
   bookings: Booking[];
   loaded: boolean;
@@ -57,10 +62,10 @@ export function CalendarPanel({
       <div className="monthbar">
         <h2>{viewTitle(view, anchor)}</h2>
         <div className="navs">
-          <button className="btn" aria-label={`Previous ${step}`} disabled={!inPlanRange(view, shiftAnchor(view, anchor, -1))} onClick={() => onAnchor(shiftAnchor(view, anchor, -1))}>
+          <button className="btn" aria-label={`Previous ${step}`} disabled={!inPlanRange(view, shiftAnchor(view, anchor, -1), range)} onClick={() => onAnchor(shiftAnchor(view, anchor, -1))}>
             ‹
           </button>
-          <button className="btn" aria-label={`Next ${step}`} disabled={!inPlanRange(view, shiftAnchor(view, anchor, 1))} onClick={() => onAnchor(shiftAnchor(view, anchor, 1))}>
+          <button className="btn" aria-label={`Next ${step}`} disabled={!inPlanRange(view, shiftAnchor(view, anchor, 1), range)} onClick={() => onAnchor(shiftAnchor(view, anchor, 1))}>
             ›
           </button>
           <div className="tabs seg" role="group" aria-label="Calendar view">
@@ -78,7 +83,7 @@ export function CalendarPanel({
       ) : view === "week" ? (
         <WeekGrid anchor={anchor} trips={trips} bookings={bookings} today={today} onTrip={onTrip} onBooking={onBooking} />
       ) : (
-        <DayView anchor={anchor} trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={onTrip} onBooking={onBooking} />
+        <DayView anchor={anchor} currency={currency} trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={onTrip} onBooking={onBooking} />
       )}
 
       <div className="legend">
@@ -95,6 +100,7 @@ export function CalendarPanel({
 /** Day view: where you are, then what's booked — kept as two separate sections. */
 function DayView({
   anchor,
+  currency,
   trips,
   bookings,
   loaded,
@@ -103,6 +109,7 @@ function DayView({
   onBooking,
 }: {
   anchor: string;
+  currency: string;
   trips: Trip[];
   bookings: Booking[];
   loaded: boolean;
@@ -134,7 +141,7 @@ function DayView({
           const top = [BOOKING_TYPES[b.type], b.time, b.provider].filter(Boolean).join(" · ");
           const bottom = [
             checkout ? "Check out" : n ? `${fmtRange(b.date, b.end_date)} · ${n} night${n > 1 ? "s" : ""}` : "",
-            !checkout && Number(b.cost) > 0 ? money(b.cost) : "",
+            !checkout && Number(b.cost) > 0 ? money(b.cost, currency) : "",
           ]
             .filter(Boolean)
             .join(" · ");
