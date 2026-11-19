@@ -2,7 +2,7 @@
 
 import { BOOKING_TYPES, dayNum, fmtDate, fmtRange, KINDS, money, tripEnd } from "@/lib/logic";
 import type { Booking, Trip } from "@/lib/types";
-import { BookingPill, CopyCode, DeleteButton } from "./ui";
+import { AddToCalendar, BookingPill, CopyCode, DeleteButton } from "./ui";
 
 export function TripDetail({
   trip,
@@ -154,12 +154,17 @@ export function BookingDetail({
           </>
         )}
       </dl>
-      {canEdit && (
+      {(b.date || canEdit) && (
         <div className="row-actions">
-          <button className="btn small" onClick={onEdit}>
-            Edit
-          </button>
-          <DeleteButton onConfirm={onDelete} />
+          <AddToCalendar booking={b} trip={trip} toast={toast} />
+          {canEdit && (
+            <>
+              <button className="btn small" onClick={onEdit}>
+                Edit
+              </button>
+              <DeleteButton onConfirm={onDelete} />
+            </>
+          )}
         </div>
       )}
     </>

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { categoryOf } from "@/lib/logic";
-import type { Booking, BookingType } from "@/lib/types";
+import { bookingIcs, icsFileName } from "@/lib/ics";
+import type { Booking, BookingType, Trip } from "@/lib/types";
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -84,6 +85,36 @@ export function CopyCode({ code, toast }: { code: string; toast: (m: string) => 
       }}
     >
       {code}
+    </button>
+  );
+}
+
+/**
+ * One booking, straight into whichever calendar the phone opens .ics files with. The subscribable
+ * feed covers everything eventually, but Google can take most of a day to refresh it — this is for
+ * the dinner you booked for tonight.
+ */
+export function AddToCalendar({ booking, trip, toast }: { booking: Booking; trip?: Trip; toast: (m: string) => void }) {
+  if (!booking.date) return null;
+  return (
+    <button
+      className="btn small"
+      onClick={() => {
+        try {
+          const url = URL.createObjectURL(new Blob([bookingIcs(booking, trip, booking.plan_id)], { type: "text/calendar;charset=utf-8" }));
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = icsFileName(booking.title);
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        } catch {
+          toast("Couldn't build the calendar file.");
+        }
+      }}
+    >
+      Add to calendar
     </button>
   );
 }

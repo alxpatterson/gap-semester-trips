@@ -14,6 +14,7 @@ export interface Plan {
   end_date: string | null;
   currency: string; // ISO code, e.g. "USD", "EUR"
   track_schengen: boolean;
+  calendar_token?: string | null; // the secret in the calendar feed's URL (0008)
 }
 
 export interface Trip {

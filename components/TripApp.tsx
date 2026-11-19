@@ -6,6 +6,7 @@ import { getSupabase } from "@/lib/supabase";
 import { canEditPlan, fmtRange, initialAnchor, localToday, maxSchengenWindow, money, MONTHS, planRange, type CalView } from "@/lib/logic";
 import type { Booking, Category, MemberRole, Plan, SyncStatus, Task, Trip } from "@/lib/types";
 import BudgetPanel, { BudgetChip } from "./BudgetPanel";
+import CalendarFeed from "./CalendarFeed";
 import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
 import Tasks from "./Tasks";
 import { CalendarPanel, TripRail } from "./Calendar";
@@ -170,7 +171,9 @@ function PlanView({
 
   const load = useCallback(async () => {
     const [p, t, b, k, s] = await Promise.all([
-      sb.from("plans").select("id,name,budget_usd,budget_note,start_date,end_date,currency,track_schengen").eq("id", planId).single(),
+      // Every column, rather than a list: the calendar token arrived in 0008, and naming a column
+      // the database doesn't have yet would fail the whole load on a deploy that got there first.
+      sb.from("plans").select("*").eq("id", planId).single(),
       sb.from("trips").select("*").eq("plan_id", planId),
       sb.from("bookings").select("*").eq("plan_id", planId),
       sb.from("tasks").select("*").eq("plan_id", planId),
@@ -358,6 +361,7 @@ function PlanView({
     sheet = (
       <Sheet title="Trip settings" onClose={() => setView(null)}>
         <PlanSettings sb={sb} plan={plan} canEdit={canEdit} onSaved={load} toast={toast} />
+        {plan && <CalendarFeed sb={sb} plan={plan} canEdit={canEdit} onRotated={load} toast={toast} />}
         <People sb={sb} planId={planId} email={email} role={role} toast={toast} />
       </Sheet>
     );

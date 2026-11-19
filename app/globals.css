@@ -300,6 +300,12 @@ a { color: var(--link); }
 .people li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-md); overflow-wrap: anywhere; }
 .people .role { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg); color: var(--ink); font-size: 12.5px; padding: 3px 6px; flex: none; }
 
+/* The subscribable calendar link: long, so it gets its own row and scrolls rather than wraps. */
+a.btn { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
+.feed { display: flex; gap: 8px; align-items: center; }
+.feed input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); color: var(--muted); font-family: var(--mono); font-size: 12px; padding: 8px 10px; }
+.feed .btn { flex: none; }
+
 /* Sign-in and setup */
 .center { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
 .card { background: var(--surface); border: 0; box-shadow: var(--shadow); border-radius: var(--r-lg); padding: 24px; width: min(420px, 100%); display: flex; flex-direction: column; gap: 14px; }
