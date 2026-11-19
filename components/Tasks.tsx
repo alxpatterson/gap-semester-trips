@@ -56,7 +56,7 @@ export default function Tasks({
         >
           <input
             aria-label="What needs doing?"
-            placeholder="Renew passport, book Dublin hostel…"
+            placeholder="Renew passport, book the hostel…"
             maxLength={140}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
