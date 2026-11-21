@@ -15,7 +15,11 @@ export interface Plan {
   currency: string; // ISO code, e.g. "USD", "EUR"
   track_schengen: boolean;
   calendar_token?: string | null; // the secret in the calendar feed's URL (0008)
+  kind?: PlanKind; // 0010; missing before that migration, which means personal
 }
+
+/** A personal plan is someone's own trip; a group plan is one trip shared with friends (0010). */
+export type PlanKind = "personal" | "group";
 
 export interface Trip {
   plan_id: string;
@@ -62,6 +66,7 @@ export interface Task {
   trip_id: string | null;
   created_by: string | null;
   done_at: string | null;
+  assignee?: string | null; // an email (0010)
 }
 
 export interface SyncStatus {
@@ -71,4 +76,53 @@ export interface SyncStatus {
   updated: number;
   review: number;
   last_error: string;
+}
+
+// ---------- Doing it with friends (0010) ----------
+export interface Member {
+  email: string;
+  role: MemberRole;
+}
+
+export interface Profile {
+  email: string;
+  display_name: string;
+  pay_handle: string; // a Venmo/PayPal/Revolut handle or link
+}
+
+export interface BookingPerson {
+  plan_id: string;
+  booking_id: string;
+  email: string;
+}
+
+export interface TripNote {
+  plan_id: string;
+  id: string;
+  trip_id: string;
+  author: string;
+  body: string;
+  created_at: string;
+}
+
+export type ExpenseKind = "expense" | "settlement";
+
+export interface Share {
+  email: string;
+  amount: number;
+}
+
+export interface Expense {
+  plan_id: string;
+  id: string;
+  kind: ExpenseKind;
+  title: string;
+  amount: number;
+  currency: string;
+  paid_by: string; // for a settlement, the person paying back
+  date: string;
+  trip_id: string | null;
+  booking_id: string | null;
+  shares: Share[]; // for a settlement, the one person being paid
+  notes: string;
 }

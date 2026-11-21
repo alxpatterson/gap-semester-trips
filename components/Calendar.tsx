@@ -326,12 +326,15 @@ export function TripRail({
   loaded,
   today,
   onTrip,
+  sharedIn,
 }: {
   trips: Trip[];
   bookings: Booking[];
   loaded: boolean;
   today: string;
   onTrip: (id: string) => void;
+  /** Trips from a shared (group) plan, by id → that plan's name, labelled so they read as shared. */
+  sharedIn?: Record<string, string>;
 }) {
   const list = [...trips].sort((a, b) => (a.start_date || "9").localeCompare(b.start_date || "9"));
   return (
@@ -354,6 +357,7 @@ export function TripRail({
                 <span className="t">{t.title}</span>
                 <span className={`pill ${t.status}`}>{t.status}</span>
                 <span className="d">
+                  {sharedIn?.[t.id] && "Shared · "}
                   {t.start_date ? fmtRange(t.start_date, t.end_date) : "No dates yet"}
                   {n > 0 && ` · ${n} booking${n > 1 ? "s" : ""}`}
                 </span>

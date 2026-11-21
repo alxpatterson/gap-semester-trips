@@ -54,6 +54,19 @@ async function syncPlan(sb: SupabaseClient) {
   return data[0] as { id: string; budget_usd: number };
 }
 
+/**
+ * The plans a sync-made row may have moved to: every plan the sync plan's owner belongs to, which
+ * includes trips they shared with friends (0010). Looking only there, rather than across every
+ * plan, means nobody else's rows can ever be mistaken for the sync's own.
+ */
+async function ownerPlans(sb: SupabaseClient, planId: string) {
+  const { data: owners } = await sb.from("plan_members").select("email").eq("plan_id", planId).eq("role", "owner");
+  const emails = (owners ?? []).map((o) => (o.email as string).toLowerCase());
+  if (!emails.length) return [planId];
+  const { data } = await sb.from("plan_members").select("plan_id").in("email", emails);
+  return [...new Set([planId, ...(data ?? []).map((r) => r.plan_id as string)])];
+}
+
 /** What the sync needs in order to dedupe: which emails it has seen, and what the plan already holds. */
 export async function GET(req: Request) {
   if (!authorized(req)) return json({ error: "Unauthorized" }, 401);
@@ -94,12 +107,15 @@ export async function POST(req: Request) {
   try {
     const plan = await syncPlan(sb);
     const trips = rowsOf(body.trips, "trips").map((t) => normalizeTrip(t, plan.id));
+    const mine = await ownerPlans(sb, plan.id);
     const bookings = rowsOf(body.bookings, "bookings").map((b) => normalizeBooking(b, plan.id));
 
     // Trips: only ever created, never changed — dates and names are Alex's to edit.
     let tripsAdded = 0;
     if (trips.length) {
-      const { data: have } = await sb.from("trips").select("id").eq("plan_id", plan.id).in("id", trips.map((t) => t.id));
+      // Looked up across the owner's plans: a trip shared with friends (0010) now lives in its
+      // group plan, and must not be recreated here.
+      const { data: have } = await sb.from("trips").select("id").in("plan_id", mine).in("id", trips.map((t) => t.id));
       const known = new Set((have ?? []).map((r) => r.id as string));
       const fresh = trips.filter((t) => !known.has(t.id));
       if (fresh.length) {
@@ -125,13 +141,16 @@ export async function POST(req: Request) {
     let updated = 0;
     let skipped = 0;
     if (bookings.length) {
+      // Across the owner's plans, like trips above: a booking moved into a shared trip is still
+      // updated where it now lives, rather than being added again to this plan.
       const { data: have, error } = await sb
         .from("bookings")
-        .select("id,source")
-        .eq("plan_id", plan.id)
+        .select("id,source,plan_id")
+        .in("plan_id", mine)
         .in("id", bookings.map((b) => b.id));
       if (error) return json({ error: `Couldn't read bookings: ${error.message}` }, 500);
       const known = new Map((have ?? []).map((r) => [r.id as string, r.source as string]));
+      const home = new Map((have ?? []).map((r) => [r.id as string, r.plan_id as string]));
 
       const fresh = bookings.filter((b) => !known.has(b.id));
       if (fresh.length) {
@@ -149,7 +168,7 @@ export async function POST(req: Request) {
         const { error: updateError } = await sb
           .from("bookings")
           .update(updatableFields(b))
-          .eq("plan_id", plan.id)
+          .eq("plan_id", home.get(b.id) ?? plan.id)
           .eq("id", b.id)
           .eq("source", SYNC_SOURCE);
         if (updateError) return json({ error: `Couldn't update ${b.id}: ${updateError.message}` }, 500);

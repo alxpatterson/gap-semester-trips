@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { canEditPlan, fmtRange, initialAnchor, localToday, maxSchengenWindow, money, MONTHS, planRange, type CalView } from "@/lib/logic";
-import type { Booking, Category, MemberRole, Plan, SyncStatus, Task, Trip } from "@/lib/types";
+import type { Booking, BookingPerson, Category, Expense, Member, MemberRole, Plan, PlanKind, Profile, SyncStatus, Task, Trip, TripNote } from "@/lib/types";
+import { nameOf } from "@/lib/split";
 import BudgetPanel, { BudgetChip } from "./BudgetPanel";
 import CalendarFeed from "./CalendarFeed";
 import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
@@ -14,6 +15,7 @@ import { BookingDetail, TripDetail } from "./Details";
 import { BookingForm, TripForm, type BookingInput, type TripInput } from "./Forms";
 import InstallHint from "./InstallHint";
 import { Onboarding, RecoveryScreen, SetPassword, SetupNeeded, SignIn } from "./SignIn";
+import { Balances, BookingPeople, ExpenseDetail, ExpenseForm, ProfileForm, TripSocial, type ExpenseInput } from "./Social";
 import { Sheet, useToast } from "./ui";
 
 type View =
@@ -22,9 +24,24 @@ type View =
   | { kind: "trip-form"; trip?: Partial<Trip> }
   | { kind: "booking-form"; booking?: Partial<Booking> }
   | { kind: "people" }
+  | { kind: "expense"; id: string }
+  | { kind: "expense-form"; expense?: Partial<Expense> }
   | null;
 
-type Cache = { plan: Plan; trips: Trip[]; bookings: Booking[]; tasks: Task[]; sync: SyncStatus | null; savedAt: string };
+/** Everything for doing a trip with friends (0010). Absent from caches saved before it existed. */
+type Social = {
+  on: boolean; // false until the 0010 tables exist, which hides every control that would write to them
+  members: Member[];
+  profiles: Profile[];
+  expenses: Expense[];
+  people: BookingPerson[];
+  notes: TripNote[];
+  sharedTrips: Trip[]; // trips from group plans you're on, shown on your own calendar
+};
+const NO_SOCIAL: Social = { on: false, members: [], profiles: [], expenses: [], people: [], notes: [], sharedTrips: [] };
+
+type Cache = { plan: Plan; trips: Trip[]; bookings: Booking[]; tasks: Task[]; sync: SyncStatus | null; social?: Social; savedAt: string };
+type Membership = { plan_id: string; role: MemberRole; name: string; kind: PlanKind };
 
 const cacheKey = (planId: string) => `gst:cache:${planId}`;
 const readCache = (planId: string): Cache | null => {
@@ -81,24 +98,25 @@ function PlanLoader({ sb, email }: { sb: SupabaseClient; email: string }) {
     }
   });
   // Someone can own one trip and be a guest on a friend's, so keep the whole list for the picker.
-  const [memberships, setMemberships] = useState<{ plan_id: string; role: MemberRole; name: string }[]>([]);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     sb.from("plan_members")
-      .select("plan_id,role,plans(name)")
+      // plans(*) rather than naming columns, so this works before and after 0010 added `kind`.
+      .select("plan_id,role,plans(*)")
       .ilike("email", email)
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) return; // Offline: keep the cached plan id and role, if any.
-        const rows = (data ?? []).map((r) => ({
-          plan_id: r.plan_id as string,
-          role: r.role as MemberRole,
-          name: ((r.plans as { name?: string } | null)?.name ?? "Trip") as string,
-        }));
-        // Your own trip first, so that's what opens.
-        rows.sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
+        const rows: Membership[] = (data ?? []).map((r) => {
+          const p = r.plans as { name?: string; kind?: PlanKind } | null;
+          return { plan_id: r.plan_id as string, role: r.role as MemberRole, name: p?.name ?? "Trip", kind: p?.kind ?? "personal" };
+        });
+        // Your own trip first, so that's what opens; then other people's; shared trips last.
+        const rank = (m: Membership) => (m.kind === "group" ? 2 : m.role === "owner" ? 0 : 1);
+        rows.sort((a, b) => rank(a) - rank(b));
         setMemberships(rows);
         let chosen = rows.find((r) => r.plan_id === localStorage.getItem("gst:plan")) ?? rows[0];
         setPlanId(chosen?.plan_id ?? null);
@@ -131,7 +149,14 @@ function PlanLoader({ sb, email }: { sb: SupabaseClient; email: string }) {
 
   if (planId === undefined) return null;
   if (planId === null) return <Onboarding sb={sb} email={email} onCreated={() => setReload((n) => n + 1)} />;
-  return <PlanView sb={sb} planId={planId} email={email} role={role} memberships={memberships} onPickPlan={pick} />;
+  // After a trip is shared: remember the new plan as the one to open, then reload the list.
+  const plansChanged = (openId: string) => {
+    try {
+      localStorage.setItem("gst:plan", openId);
+    } catch {}
+    setReload((n) => n + 1);
+  };
+  return <PlanView sb={sb} planId={planId} email={email} role={role} memberships={memberships} onPickPlan={pick} onPlansChanged={plansChanged} />;
 }
 
 function PlanView({
@@ -141,13 +166,15 @@ function PlanView({
   role,
   memberships,
   onPickPlan,
+  onPlansChanged,
 }: {
   sb: SupabaseClient;
   planId: string;
   email: string;
   role: MemberRole | null;
-  memberships: { plan_id: string; role: MemberRole; name: string }[];
+  memberships: Membership[];
   onPickPlan: (id: string) => void;
+  onPlansChanged: (openId: string) => void;
 }) {
   const cached = useMemo(() => readCache(planId), [planId]);
   const [plan, setPlan] = useState<Plan | null>(cached?.plan ?? null);
@@ -155,6 +182,7 @@ function PlanView({
   const [bookings, setBookings] = useState<Booking[]>(cached?.bookings ?? []);
   const [tasks, setTasks] = useState<Task[]>(cached?.tasks ?? []);
   const [sync, setSync] = useState<SyncStatus | null>(cached?.sync ?? null);
+  const [social, setSocial] = useState<Social>(cached?.social ?? NO_SOCIAL);
   const [loaded, setLoaded] = useState(!!cached);
   const [stale, setStale] = useState<string | null>(null); // savedAt of the offline copy being shown
   const [online, setOnline] = useState(true);
@@ -169,8 +197,15 @@ function PlanView({
   const [saving, setSaving] = useState(false);
   const { toast, node: toastNode } = useToast();
 
+  // Group plans to pull trips from — only onto a personal plan, never from a group plan into another.
+  const groupIds = useMemo(
+    () => memberships.filter((m) => m.kind === "group" && m.plan_id !== planId).map((m) => m.plan_id),
+    [memberships, planId],
+  );
+  const groupKey = groupIds.join(",");
+
   const load = useCallback(async () => {
-    const [p, t, b, k, s] = await Promise.all([
+    const [p, t, b, k, s, social] = await Promise.all([
       // Every column, rather than a list: the calendar token arrived in 0008, and naming a column
       // the database doesn't have yet would fail the whole load on a deploy that got there first.
       sb.from("plans").select("*").eq("id", planId).single(),
@@ -178,6 +213,7 @@ function PlanView({
       sb.from("bookings").select("*").eq("plan_id", planId),
       sb.from("tasks").select("*").eq("plan_id", planId),
       sb.from("sync_status").select("plan_id,last_run,added,updated,review,last_error").eq("plan_id", planId).maybeSingle(),
+      loadSocial(sb, planId, groupKey ? groupKey.split(",") : []),
     ]);
     if (p.error || t.error || b.error) {
       setStale(readCache(planId)?.savedAt ?? null);
@@ -190,6 +226,7 @@ function PlanView({
       bookings: ((b.data ?? []) as Booking[]).map((x) => ({ ...x, cost: Number(x.cost) || 0 })),
       tasks: (k.data ?? []) as Task[],
       sync: (s.data as SyncStatus | null) ?? null,
+      social,
       savedAt: new Date().toISOString(),
     };
     setPlan(next.plan);
@@ -197,10 +234,11 @@ function PlanView({
     setBookings(next.bookings);
     setTasks(next.tasks);
     setSync(next.sync);
+    setSocial(social);
     setStale(null);
     setLoaded(true);
     writeCache(next);
-  }, [sb, planId]);
+  }, [sb, planId, groupKey]);
 
   // Initial load, live updates from Supabase (your edits, your girlfriend's, and the Gmail sync), and refresh on reconnect.
   useEffect(() => {
@@ -230,11 +268,39 @@ function PlanView({
     };
   }, [sb, planId, load]);
 
+  // The 0010 tables get their own channel, opened only once they're known to exist, so a database
+  // without them can't break live updates for everything else.
+  useEffect(() => {
+    if (!social.on) return;
+    const channel = sb.channel(`plan-${planId}-social`);
+    for (const table of ["expenses", "booking_people", "trip_notes"])
+      channel.on("postgres_changes", { event: "*", schema: "public", table, filter: `plan_id=eq.${planId}` }, () => load());
+    channel.subscribe();
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, [sb, planId, load, social.on]);
+
   const range = useMemo(() => planRange(plan, today), [plan, today]);
   // The window isn't known until the plan loads, so settle the opening day once it is.
   const day = anchor ?? initialAnchor(today, range);
   const canEdit = canEditPlan(role, online, !!stale);
-  const schengen = maxSchengenWindow(trips);
+  const isGroup = plan?.kind === "group";
+  const me = email.toLowerCase();
+  // Your calendar, the trip list and the Schengen count include trips you're on in shared plans.
+  const allTrips = useMemo(() => [...trips, ...social.sharedTrips], [trips, social.sharedTrips]);
+  const sharedIn = useMemo<Record<string, string>>(
+    () => ({
+      ...Object.fromEntries(social.sharedTrips.map((t) => [t.id, memberships.find((m) => m.plan_id === t.plan_id)?.name ?? "a shared trip"])),
+      ...(isGroup ? Object.fromEntries(trips.map((t) => [t.id, plan?.name ?? "this shared trip"])) : {}),
+    }),
+    [social.sharedTrips, memberships, isGroup, trips, plan?.name],
+  );
+  const schengen = maxSchengenWindow(allTrips);
+  const withFriends = social.on && social.members.length > 1;
+  const people = withFriends ? social.members.map((m) => ({ email: m.email.toLowerCase(), label: m.email.toLowerCase() === me ? "Me" : nameOf(m.email, social.profiles) })) : [];
+  // A group plan is created with no budget; showing "$0 left" there would only confuse.
+  const showBudget = !!plan && !(isGroup && !(Number(plan.budget_usd) > 0));
 
   // ---------- Writes ----------
   const run = async (fn: () => PromiseLike<{ error: { message: string } | null }>, ok: string) => {
@@ -268,8 +334,9 @@ function PlanView({
     if (done) setView(id ? { kind: "booking", id } : null);
   };
 
-  const addTask = (title: string, due: string | null) =>
-    run(() => sb.from("tasks").insert({ plan_id: planId, id: crypto.randomUUID(), title, due }), "Added");
+  // assignee is only sent when one is picked, so adding a to-do keeps working before 0010 has run.
+  const addTask = (title: string, due: string | null, assignee: string | null) =>
+    run(() => sb.from("tasks").insert({ plan_id: planId, id: crypto.randomUUID(), title, due, ...(assignee ? { assignee } : {}) }), "Added");
 
   const toggleTask = (t: Task) =>
     run(
@@ -282,6 +349,49 @@ function PlanView({
   const remove = async (table: "trips" | "bookings", id: string) => {
     if (await run(() => sb.from(table).delete().eq("plan_id", planId).eq("id", id), "Deleted")) setView(null);
   };
+
+  // ---------- Doing it with friends (0010) ----------
+  const saveExpense = async (data: ExpenseInput, id?: string) => {
+    const done = await run(
+      () =>
+        id
+          ? sb.from("expenses").update(data).eq("plan_id", planId).eq("id", id)
+          : sb.from("expenses").insert({ ...data, plan_id: planId, id: crypto.randomUUID() }),
+      data.kind === "settlement" ? "Payment recorded" : id ? "Expense saved" : "Expense added",
+    );
+    if (done) setView(id ? { kind: "expense", id } : null);
+  };
+
+  const deleteExpense = async (id: string) => {
+    if (await run(() => sb.from("expenses").delete().eq("plan_id", planId).eq("id", id), "Deleted")) setView(null);
+  };
+
+  const toggleOnBooking = (bookingId: string, who: string, on: boolean) =>
+    run(
+      () =>
+        on
+          ? sb.from("booking_people").insert({ plan_id: planId, booking_id: bookingId, email: who })
+          : sb.from("booking_people").delete().eq("plan_id", planId).eq("booking_id", bookingId).eq("email", who),
+      on ? "Added to the booking" : "Taken off the booking",
+    );
+
+  const addNote = (tripId: string, body: string) =>
+    run(() => sb.from("trip_notes").insert({ plan_id: planId, id: crypto.randomUUID(), trip_id: tripId, author: me, body }), "Posted");
+
+  const deleteNote = (id: string) => run(() => sb.from("trip_notes").delete().eq("plan_id", planId).eq("id", id), "Deleted");
+
+  const shareTrip = async (trip: Trip, invitees: string[]) => {
+    setSaving(true);
+    const { data, error } = await sb.rpc("share_trip", { from_plan: planId, trip: trip.id, invitees });
+    setSaving(false);
+    if (error) return toast(`Couldn't share: ${error.message}`);
+    toast(`${trip.title} is shared`);
+    setView(null);
+    onPlansChanged(data as string);
+  };
+
+  const saveProfile = async (p: { display_name: string; pay_handle: string }) =>
+    run(() => sb.from("profiles").upsert({ email: me, ...p }, { onConflict: "email" }), "Saved");
 
   const pickCategory = (c: Category) => {
     setCategory(c);
@@ -309,6 +419,7 @@ function PlanView({
   let sheet: React.ReactNode = null;
   if (view?.kind === "trip") {
     const trip = trips.find((t) => t.id === view.id);
+    const elsewhere = trip ? undefined : social.sharedTrips.find((t) => t.id === view.id);
     if (trip)
       sheet = (
         <Sheet title={trip.title} onClose={() => setView(null)}>
@@ -320,6 +431,42 @@ function PlanView({
             onAddBooking={() => setView({ kind: "booking-form", booking: { trip_id: trip.id, date: trip.start_date } })}
             onEdit={() => setView({ kind: "trip-form", trip })}
             onDelete={() => remove("trips", trip.id)}
+          />
+          {social.on && (
+            <TripSocial
+              trip={trip}
+              bookings={bookings}
+              people={social.people}
+              notes={social.notes}
+              expenses={social.expenses}
+              members={social.members}
+              profiles={social.profiles}
+              me={me}
+              currency={plan?.currency ?? "USD"}
+              canEdit={canEdit}
+              canShare={canEdit && !isGroup}
+              saving={saving}
+              onOpenBooking={(id) => setView({ kind: "booking", id })}
+              onAddExpense={() => setView({ kind: "expense-form", expense: { kind: "expense", trip_id: trip.id } })}
+              onAddNote={(body) => addNote(trip.id, body)}
+              onDeleteNote={deleteNote}
+              onShare={(emails) => shareTrip(trip, emails)}
+            />
+          )}
+        </Sheet>
+      );
+    else if (elsewhere)
+      sheet = (
+        <Sheet title={elsewhere.title} onClose={() => setView(null)}>
+          <TripDetail
+            trip={elsewhere}
+            bookings={[]}
+            canEdit={false}
+            onOpenBooking={() => {}}
+            onAddBooking={() => {}}
+            onEdit={() => {}}
+            onDelete={() => {}}
+            external={{ name: sharedIn[elsewhere.id], onOpen: () => onPickPlan(elsewhere.plan_id) }}
           />
         </Sheet>
       );
@@ -337,6 +484,32 @@ function PlanView({
             onEdit={() => setView({ kind: "booking-form", booking })}
             onDelete={() => remove("bookings", booking.id)}
           />
+          {social.on && (
+            <BookingPeople
+              booking={booking}
+              people={social.people}
+              members={social.members}
+              profiles={social.profiles}
+              me={me}
+              canEdit={canEdit}
+              onToggle={(who, on) => toggleOnBooking(booking.id, who, on)}
+            />
+          )}
+          {withFriends && canEdit && Number(booking.cost) > 0 && (
+            <div className="row-actions">
+              <button
+                className="btn small"
+                onClick={() =>
+                  setView({
+                    kind: "expense-form",
+                    expense: { kind: "expense", title: booking.title, trip_id: booking.trip_id, booking_id: booking.id, date: booking.date ?? undefined },
+                  })
+                }
+              >
+                Split this cost
+              </button>
+            </div>
+          )}
         </Sheet>
       );
   } else if (view?.kind === "trip-form") {
@@ -362,7 +535,47 @@ function PlanView({
       <Sheet title="Trip settings" onClose={() => setView(null)}>
         <PlanSettings sb={sb} plan={plan} canEdit={canEdit} onSaved={load} toast={toast} />
         {plan && <CalendarFeed sb={sb} plan={plan} canEdit={canEdit} onRotated={load} toast={toast} />}
+        {social.on && (
+          <>
+            <div className="section-t">Your name</div>
+            <ProfileForm profile={social.profiles.find((p) => p.email === me)} me={me} onSave={saveProfile} />
+          </>
+        )}
         <People sb={sb} planId={planId} email={email} role={role} toast={toast} />
+      </Sheet>
+    );
+  } else if (view?.kind === "expense") {
+    const expense = social.expenses.find((x) => x.id === view.id);
+    if (expense)
+      sheet = (
+        <Sheet title={expense.kind === "settlement" ? "Payment" : expense.title || "Expense"} onClose={() => setView(null)}>
+          <ExpenseDetail
+            expense={expense}
+            profiles={social.profiles}
+            me={me}
+            currency={plan?.currency ?? "USD"}
+            trips={trips}
+            canEdit={canEdit}
+            onEdit={() => setView({ kind: "expense-form", expense })}
+            onDelete={() => deleteExpense(expense.id)}
+          />
+        </Sheet>
+      );
+  } else if (view?.kind === "expense-form") {
+    const x = view.expense;
+    sheet = (
+      <Sheet title={x?.kind === "settlement" ? "Record a payment" : x?.id ? "Edit expense" : "New expense"} onClose={() => setView(null)}>
+        <ExpenseForm
+          expense={x}
+          members={social.members}
+          profiles={social.profiles}
+          me={me}
+          currency={plan?.currency ?? "USD"}
+          trips={trips}
+          saving={saving}
+          onSave={(d) => saveExpense(d, x?.id)}
+          onCancel={() => setView(x?.id ? { kind: "expense", id: x.id } : null)}
+        />
       </Sheet>
     );
   }
@@ -384,9 +597,9 @@ function PlanView({
           )}
         </div>
         <div className="chips">
-          {plan && <BudgetChip plan={plan} bookings={bookings} loaded={loaded} onOpen={() => setTab("book")} />}
+          {showBudget && plan && <BudgetChip plan={plan} bookings={bookings} loaded={loaded} onOpen={() => setTab("book")} />}
           {syncChip}
-          {trips.some((t) => t.schengen) && (
+          {allTrips.some((t) => t.schengen) && (
             <span className={`chip ${schengen > 90 ? "bad" : schengen > 80 ? "warn" : ""}`} title="Most planned days inside the Schengen area in any 180-day window (limit 90)">
               <span className="dot" />
               Schengen <b>{loaded ? schengen : "–"}</b> / 90 days
@@ -427,7 +640,7 @@ function PlanView({
             anchor={day}
             range={range}
             currency={plan?.currency ?? "USD"}
-            trips={trips}
+            trips={allTrips}
             bookings={bookings}
             loaded={loaded}
             today={today}
@@ -446,13 +659,40 @@ function PlanView({
               onAdd={addTask}
               onToggle={toggleTask}
               onDelete={deleteTask}
+              people={people}
+              me={me}
             />
-            <TripRail trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={(id) => setView({ kind: "trip", id })} />
+            <TripRail
+              trips={allTrips}
+              bookings={bookings}
+              loaded={loaded}
+              today={today}
+              sharedIn={sharedIn}
+              onTrip={(id) => setView({ kind: "trip", id })}
+            />
           </div>
         </section>
       ) : (
         <>
-          {plan && <BudgetPanel plan={plan} bookings={bookings} loaded={loaded} onPickCategory={pickCategory} />}
+          {showBudget && plan && <BudgetPanel plan={plan} bookings={bookings} loaded={loaded} onPickCategory={pickCategory} />}
+          {social.on && (
+            <Balances
+              expenses={social.expenses}
+              members={social.members}
+              profiles={social.profiles}
+              me={me}
+              currency={plan?.currency ?? "USD"}
+              canEdit={canEdit}
+              onAdd={() => setView({ kind: "expense-form", expense: { kind: "expense" } })}
+              onOpen={(id) => setView({ kind: "expense", id })}
+              onSettle={(t) =>
+                setView({
+                  kind: "expense-form",
+                  expense: { kind: "settlement", paid_by: t.from, amount: t.amount, currency: t.currency, shares: [{ email: t.to, amount: t.amount }] },
+                })
+              }
+            />
+          )}
           <Bookings
             bookings={bookings}
             trips={trips}
@@ -621,8 +861,8 @@ function People({
   return (
     <>
       <p className="empty" style={{ padding: 0 }}>
-        Editors can change trips, bookings and the budget. Viewers see everything but can&apos;t change anything. Each person also needs an
-        account with a password, created in Supabase → Authentication → Users → Add user.
+        Editors can change trips, bookings and the budget. Viewers see everything but can&apos;t change anything. Someone without an
+        account gets in by signing up with the email you add here.
       </p>
       {role === "viewer" && <p className="empty" style={{ padding: 0 }}>You have view-only access to this plan.</p>}
       <ul className="people">
@@ -707,4 +947,32 @@ function People({
       )}
     </>
   );
+}
+
+/**
+ * The 0010 tables, loaded alongside the rest. Every query tolerates the table not existing yet: if
+ * expenses can't be read, the whole social layer stays off and the app behaves exactly as before.
+ */
+async function loadSocial(sb: SupabaseClient, planId: string, groupIds: string[]): Promise<Social> {
+  const [members, profiles, expenses, people, notes, shared] = await Promise.all([
+    sb.from("plan_members").select("email,role").eq("plan_id", planId).order("added_at"),
+    sb.from("profiles").select("*"),
+    sb.from("expenses").select("*").eq("plan_id", planId),
+    sb.from("booking_people").select("*").eq("plan_id", planId),
+    sb.from("trip_notes").select("*").eq("plan_id", planId),
+    groupIds.length ? sb.from("trips").select("*").in("plan_id", groupIds) : Promise.resolve({ data: [], error: null }),
+  ]);
+  return {
+    on: !expenses.error,
+    members: ((members.data ?? []) as Member[]).map((m) => ({ ...m, email: m.email.toLowerCase() })),
+    profiles: (profiles.data ?? []) as Profile[],
+    expenses: ((expenses.data ?? []) as Expense[]).map((x) => ({
+      ...x,
+      amount: Number(x.amount) || 0,
+      shares: (Array.isArray(x.shares) ? x.shares : []).map((s) => ({ email: String(s.email).toLowerCase(), amount: Number(s.amount) || 0 })),
+    })),
+    people: (people.data ?? []) as BookingPerson[],
+    notes: (notes.data ?? []) as TripNote[],
+    sharedTrips: (shared.data ?? []) as Trip[],
+  };
 }
