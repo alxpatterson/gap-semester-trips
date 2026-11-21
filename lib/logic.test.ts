@@ -12,6 +12,7 @@ import {
   money,
   openTasks,
   planRange,
+  rangeMonths,
   nights,
   schengenDays,
   shiftAnchor,
@@ -286,5 +287,12 @@ describe("when a booking happens", () => {
     expect(bookingWhen(b({ time: "19:30" }))).toBe("Jan 4 · 19:30");
     expect(bookingWhen(b({ end_date: "2027-01-08" }))).toBe("Jan 4 – 8");
     expect(bookingWhen(b({ date: null }))).toBe("Not set");
+  });
+});
+
+describe("rangeMonths", () => {
+  it("lists every month the plan touches", () => {
+    expect(rangeMonths({ start: "2026-12-31", end: "2027-03-15" })).toEqual(["2026-12", "2027-01", "2027-02", "2027-03"]);
+    expect(rangeMonths({ start: "2027-02-03", end: "2027-02-20" })).toEqual(["2027-02"]);
   });
 });

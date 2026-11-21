@@ -91,11 +91,12 @@ export function money(n: number, currency = "USD") {
 
 // ---------- Calendar views ----------
 /** Day, week and month are the three ways the calendar tab can be read; week is the default. */
-export type CalView = "day" | "week" | "month";
+export type CalView = "day" | "week" | "month" | "all";
 export const CAL_VIEWS: [CalView, string][] = [
   ["day", "Day"],
   ["week", "Week"],
   ["month", "Month"],
+  ["all", "All"],
 ];
 
 /** The window the calendar can move within — the plan's own dates. */
@@ -140,6 +141,14 @@ export function viewRange(view: CalView, anchor: string): { start: string; end: 
 export function viewDays(view: CalView, anchor: string) {
   const { start, end } = viewRange(view, anchor);
   return Array.from({ length: dayNum(end) - dayNum(start) + 1 }, (_, i) => addDays(start, i));
+}
+
+/** Every month (YYYY-MM) the plan touches, first to last — what the "All" view stacks. */
+export function rangeMonths(range: PlanRange) {
+  const out: string[] = [];
+  const last = range.end.slice(0, 7);
+  for (let m = range.start.slice(0, 7); m <= last; m = shiftMonth(m, 1)) out.push(m);
+  return out;
 }
 
 /** Step one day, week or month. The day of the month is clamped, so Jan 31 → Feb 28. */
