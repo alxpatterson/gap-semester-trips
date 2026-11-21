@@ -73,7 +73,7 @@ export function parseTime(time: string): { h: number; m: number } | null {
 export const icsLocal = (date: string, h: number, m: number) =>
   `${icsDate(date)}T${String(h).padStart(2, "0")}${String(m).padStart(2, "0")}00`;
 
-/** How long a timed booking is assumed to last when only a start time is known. */
+/** Fallback length for a timed booking with no arrival time — a guess, so keep it modest. */
 const HOURS: Record<Booking["type"], number> = { flight: 2, train: 2, bus: 2, activity: 2, food: 2, stay: 1, other: 1 };
 
 const plus = (date: string, h: number, m: number, hours: number) => {
@@ -126,8 +126,17 @@ export function bookingEvent(booking: Booking, trip: Trip | undefined, planId: s
     start = ["DTSTART;VALUE=DATE", icsDate(b.date)];
     end = ["DTEND;VALUE=DATE", icsDate(b.end_date)];
   } else if (at) {
+    const arrives = parseTime(b.arrive_time);
     start = ["DTSTART", icsLocal(b.date, at.h, at.m)];
-    end = ["DTEND", plus(b.date, at.h, at.m, HOURS[b.type])];
+    if (arrives) {
+      // end_date holds the arrival day when one was given. Without it, an arrival no later than the
+      // departure can only mean the overnight case, so it lands the next morning.
+      const sameDay = arrives.h * 60 + arrives.m > at.h * 60 + at.m;
+      const lands = b.end_date && b.end_date > b.date ? b.end_date : sameDay ? b.date : addDays(b.date, 1);
+      end = ["DTEND", icsLocal(lands, arrives.h, arrives.m)];
+    } else {
+      end = ["DTEND", plus(b.date, at.h, at.m, HOURS[b.type])];
+    }
   } else {
     const last = b.end_date && b.end_date > b.date ? b.end_date : b.date;
     start = ["DTSTART;VALUE=DATE", icsDate(b.date)];

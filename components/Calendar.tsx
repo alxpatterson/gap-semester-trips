@@ -18,6 +18,7 @@ import {
   money,
   nights,
   shiftAnchor,
+  timeSpan,
   tripsOn,
   tripEnd,
   viewDays,
@@ -138,7 +139,7 @@ function DayView({
         {items.map((b) => {
           const n = nights(b);
           const checkout = b.type === "stay" && b.end_date === anchor && b.date !== anchor;
-          const top = [BOOKING_TYPES[b.type], b.time, b.provider].filter(Boolean).join(" · ");
+          const top = [BOOKING_TYPES[b.type], timeSpan(b), b.provider].filter(Boolean).join(" · ");
           const bottom = [
             checkout ? "Check out" : n ? `${fmtRange(b.date, b.end_date)} · ${n} night${n > 1 ? "s" : ""}` : "",
             !checkout && Number(b.cost) > 0 ? money(b.cost, currency) : "",

@@ -1,6 +1,6 @@
 "use client";
 
-import { BOOKING_TYPES, dayNum, fmtDate, fmtRange, KINDS, money, tripEnd } from "@/lib/logic";
+import { BOOKING_TYPES, bookingWhen, dayNum, fmtDate, fmtRange, KINDS, money, tripEnd } from "@/lib/logic";
 import type { Booking, Trip } from "@/lib/types";
 import { AddToCalendar, BookingPill, CopyCode, DeleteButton } from "./ui";
 
@@ -100,10 +100,7 @@ export function BookingDetail({
         <dt>Type</dt>
         <dd>{BOOKING_TYPES[b.type]}</dd>
         <dt>When</dt>
-        <dd className="mono">
-          {b.date ? fmtRange(b.date, b.end_date) : "Not set"}
-          {b.time && ` · ${b.time}`}
-        </dd>
+        <dd className="mono">{bookingWhen(b)}</dd>
         {trip && (
           <>
             <dt>Trip</dt>

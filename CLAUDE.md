@@ -28,6 +28,7 @@ Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 
 
 ## Domain rules
 - Booking `type` → filter category: stay → Stays; flight/train/bus → Transport; food → Food; activity → Events; other → Other.
+- A booking's `end_date` means "the day this ends": check-out for a stay, the landing day for an overnight journey, the last day of a multi-day event otherwise. `arrive_time` (0009) is only asked for on flight/train/bus; with it the calendar feed gives the event its real length, and without it falls back to a two-hour guess. An arrival no later than the departure, with no `end_date`, is read as landing the next morning.
 - Budget = plan.budget_usd minus the cost of bookings that are `booked` and `counts_in_budget`. Cost is Alex's own share in USD (group bookings are split).
 - Schengen: a day counts when a `schengen` trip covers it and no non-Schengen weekend/travel trip covers it. The chip shows the max over any rolling 180-day window; warn above 80, alert above 90.
 - Bookings synced from Gmail have `source = 'gmail'` and ids `gm-<confirmation code>`; don't change that id scheme, the daily sync relies on it to avoid duplicates.

@@ -57,6 +57,28 @@ export function nights(b: Pick<Booking, "date" | "end_date">) {
   return b.date && b.end_date && b.end_date > b.date ? dayNum(b.end_date) - dayNum(b.date) : 0;
 }
 
+type Timed = Pick<Booking, "date" | "end_date" | "time" | "arrive_time">;
+
+/** "09:40", or "09:40 → 11:55" once a journey knows when it lands. */
+export function timeSpan(b: Pick<Booking, "time" | "arrive_time">) {
+  const time = (b.time ?? "").trim();
+  const arrive = (b.arrive_time ?? "").trim();
+  if (!time) return "";
+  return arrive ? `${time} → ${arrive}` : time;
+}
+
+/** The whole when of a booking, including an overnight flight that lands on another date. */
+export function bookingWhen(b: Timed) {
+  if (!b.date) return "Not set";
+  const time = (b.time ?? "").trim();
+  const arrive = (b.arrive_time ?? "").trim();
+  if (time && arrive) {
+    const lands = b.end_date && b.end_date > b.date ? b.end_date : null;
+    return lands ? `${fmtDate(b.date)} ${time} → ${fmtDate(lands)} ${arrive}` : `${fmtDate(b.date)} · ${timeSpan(b)}`;
+  }
+  return fmtRange(b.date, b.end_date) + (time ? ` · ${time}` : "");
+}
+
 /** Whole units in the plan's own currency: $1,240 · €980 · ¥45,000. */
 export function money(n: number, currency = "USD") {
   const amount = Math.round(Number(n) || 0);

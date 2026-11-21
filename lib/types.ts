@@ -42,6 +42,7 @@ export interface Booking {
   date: string | null; // YYYY-MM-DD (departure, check-in or event day)
   end_date: string | null; // check-out for stays
   time: string;
+  arrive_time: string; // when a flight/train/bus lands; end_date carries the day if it lands on the next one (0009)
   provider: string;
   cost: number;
   confirmation: string;

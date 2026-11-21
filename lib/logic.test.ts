@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bookingsOn,
+  bookingWhen,
   budgetSummary,
   canEditPlan,
   categoryOf,
@@ -15,6 +16,7 @@ import {
   schengenDays,
   shiftAnchor,
   sortTasks,
+  timeSpan,
   startOfWeek,
   taskGroup,
   tripsOn,
@@ -214,7 +216,8 @@ describe("sync payloads", () => {
 
   it("only offers the movable fields when a booking already exists", () => {
     const row = normalizeBooking({ id: "gm-a", type: "flight", title: "Later flight", cost: 99, notes: "mine" }, plan);
-    expect(Object.keys(updatableFields(row)).sort()).toEqual(["date", "end_date", "status", "time", "title"]);
+    // arrive_time is movable too: a schedule change is exactly what moves it.
+    expect(Object.keys(updatableFields(row)).sort()).toEqual(["arrive_time", "date", "end_date", "status", "time", "title"]);
   });
 
   it("keeps the newest processed ids and drops duplicates", () => {
@@ -257,5 +260,31 @@ describe("to-do list", () => {
 
   it("counts only what is still outstanding", () => {
     expect(openTasks([task({ done: false }), task({ done: true }), task({ done: false })])).toBe(2);
+  });
+});
+
+describe("when a booking happens", () => {
+  const b = (over: Partial<Booking>) =>
+    ({ date: "2027-01-04", end_date: null, time: "", arrive_time: "", ...over }) as Booking;
+
+  it("shows a span once a journey knows when it lands", () => {
+    expect(timeSpan(b({ time: "09:40", arrive_time: "11:55" }))).toBe("09:40 → 11:55");
+    expect(timeSpan(b({ time: "09:40" }))).toBe("09:40");
+    expect(timeSpan(b({ arrive_time: "11:55" }))).toBe("");
+    expect(timeSpan(b({}))).toBe("");
+  });
+
+  it("names both dates when a flight lands on another one", () => {
+    expect(bookingWhen(b({ time: "18:40", arrive_time: "06:10", end_date: "2027-01-05" }))).toBe("Jan 4 18:40 → Jan 5 06:10");
+  });
+
+  it("keeps a same-day journey on one line", () => {
+    expect(bookingWhen(b({ time: "09:40", arrive_time: "11:55" }))).toBe("Jan 4 · 09:40 → 11:55");
+  });
+
+  it("falls back to the plain range for everything else", () => {
+    expect(bookingWhen(b({ time: "19:30" }))).toBe("Jan 4 · 19:30");
+    expect(bookingWhen(b({ end_date: "2027-01-08" }))).toBe("Jan 4 – 8");
+    expect(bookingWhen(b({ date: null }))).toBe("Not set");
   });
 });

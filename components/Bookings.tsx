@@ -1,6 +1,6 @@
 "use client";
 
-import { BOOKING_TYPES, CATEGORIES, categoryOf, fmtRange, money, MONTHS_LONG, nights } from "@/lib/logic";
+import { BOOKING_TYPES, CATEGORIES, categoryOf, fmtRange, money, MONTHS_LONG, nights, timeSpan } from "@/lib/logic";
 import type { Booking, BookingStatus, Category, Trip } from "@/lib/types";
 import { BookingPill, CopyCode, TypeTile } from "./ui";
 
@@ -89,7 +89,7 @@ export default function Bookings({
             {g.items.map((b) => {
               const trip = trips.find((t) => t.id === b.trip_id);
               const n = nights(b);
-              const top = [BOOKING_TYPES[b.type], b.time, b.provider, b.source === "gmail" ? "From Gmail" : ""].filter(Boolean).join(" · ");
+              const top = [BOOKING_TYPES[b.type], timeSpan(b), b.provider, b.source === "gmail" ? "From Gmail" : ""].filter(Boolean).join(" · ");
               const bottom = [
                 n ? `${fmtRange(b.date, b.end_date)} · ${n} night${n > 1 ? "s" : ""}` : fmtRange(b.date, b.end_date) || "No date yet",
                 trip?.title,

@@ -7,7 +7,20 @@ import type { Booking, Trip } from "@/lib/types";
 export type TripInput = Pick<Trip, "title" | "kind" | "status" | "start_date" | "end_date" | "place" | "schengen" | "notes">;
 export type BookingInput = Pick<
   Booking,
-  "title" | "type" | "status" | "trip_id" | "date" | "end_date" | "time" | "provider" | "cost" | "confirmation" | "link" | "notes" | "counts_in_budget"
+  | "title"
+  | "type"
+  | "status"
+  | "trip_id"
+  | "date"
+  | "end_date"
+  | "time"
+  | "arrive_time"
+  | "provider"
+  | "cost"
+  | "confirmation"
+  | "link"
+  | "notes"
+  | "counts_in_budget"
 >;
 
 const orNull = (v: string) => (v.trim() ? v.trim() : null);
@@ -115,6 +128,9 @@ export function BookingForm({
   onCancel: () => void;
 }) {
   const [error, setError] = useState("");
+  // A journey's dates mean something different from a stay's, so the labels follow the type.
+  const [type, setType] = useState<Booking["type"]>(booking?.type ?? "flight");
+  const journey = type === "flight" || type === "train" || type === "bus";
   const sortedTrips = [...trips].sort((a, b) => (a.start_date || "9").localeCompare(b.start_date || "9"));
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -128,6 +144,7 @@ export function BookingForm({
       date: orNull(s("date")),
       end_date: orNull(s("end_date")),
       time: s("time"),
+      arrive_time: s("arrive_time"),
       provider: s("provider").trim(),
       cost: Number(s("cost")) || 0,
       confirmation: s("confirmation").trim(),
@@ -135,7 +152,8 @@ export function BookingForm({
       notes: s("notes").trim(),
       counts_in_budget: fd.get("counts_in_budget") === "on",
     };
-    if (data.date && data.end_date && data.end_date < data.date) return setError("Check-out is before the date.");
+    if (data.date && data.end_date && data.end_date < data.date)
+      return setError(journey ? "The arrival date is before the departure." : "Check-out is before the date.");
     setError("");
     onSave(data);
   };
@@ -148,7 +166,7 @@ export function BookingForm({
       <div className="two">
         <label>
           Type
-          <select id="bf-type" name="type" defaultValue={booking?.type ?? "flight"}>
+          <select id="bf-type" name="type" value={type} onChange={(e) => setType(e.target.value as Booking["type"])}>
             {Object.entries(BOOKING_TYPES).map(([k, l]) => (
               <option key={k} value={k}>{l}</option>
             ))}
@@ -174,18 +192,31 @@ export function BookingForm({
       </label>
       <div className="two">
         <label>
-          Date (or check-in)
+          {journey ? "Departs" : type === "stay" ? "Check-in" : "Date"}
           <input id="bf-date" type="date" name="date" defaultValue={booking?.date ?? ""} />
         </label>
         <label>
-          Time
+          {journey ? "Departure time" : "Time"}
           <input id="bf-time" type="time" name="time" defaultValue={booking?.time ?? ""} />
         </label>
       </div>
-      <label>
-        Until (check-out, optional)
-        <input id="bf-end" type="date" name="end_date" defaultValue={booking?.end_date ?? ""} />
-      </label>
+      {journey ? (
+        <div className="two">
+          <label>
+            Arrives
+            <input id="bf-arrive" type="time" name="arrive_time" defaultValue={booking?.arrive_time ?? ""} />
+          </label>
+          <label>
+            Lands next day?
+            <input id="bf-end" type="date" name="end_date" defaultValue={booking?.end_date ?? ""} />
+          </label>
+        </div>
+      ) : (
+        <label>
+          {type === "stay" ? "Until (check-out, optional)" : "Until (optional)"}
+          <input id="bf-end" type="date" name="end_date" defaultValue={booking?.end_date ?? ""} />
+        </label>
+      )}
       <div className="two">
         <label>
           Provider

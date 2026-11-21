@@ -31,6 +31,7 @@ const booking = (over: Partial<Booking> = {}): Booking => ({
   date: "2027-01-04",
   end_date: null,
   time: "",
+  arrive_time: "",
   provider: "",
   cost: 0,
   confirmation: "",
@@ -131,6 +132,45 @@ describe("booking events", () => {
     expect(value(flight, "DTEND")).toBe("20270104T114000");
     const other = bookingEvent(booking({ type: "other", time: "09:40" }), undefined, PLAN, STAMP);
     expect(value(other, "DTEND")).toBe("20270104T104000");
+  });
+
+  it("ends a journey when it actually lands, not two hours later", () => {
+    const lines = bookingEvent(booking({ time: "09:40", arrive_time: "11:55" }), undefined, PLAN, STAMP);
+    expect(value(lines, "DTSTART")).toBe("20270104T094000");
+    expect(value(lines, "DTEND")).toBe("20270104T115500");
+  });
+
+  it("gives a long haul its real length instead of a flat two hours", () => {
+    const lines = bookingEvent(
+      booking({ date: "2027-03-16", time: "13:05", arrive_time: "19:40", end_date: "2027-03-17" }),
+      undefined,
+      PLAN,
+      STAMP,
+    );
+    expect(value(lines, "DTSTART")).toBe("20270316T130500");
+    expect(value(lines, "DTEND")).toBe("20270317T194000"); // ~30 hours, Europe to Australia
+  });
+
+  it("works out an overnight flight even when no arrival date was given", () => {
+    const lines = bookingEvent(booking({ time: "23:30", arrive_time: "06:10" }), undefined, PLAN, STAMP);
+    expect(value(lines, "DTSTART")).toBe("20270104T233000");
+    expect(value(lines, "DTEND")).toBe("20270105T061000");
+  });
+
+  it("keeps a same-day arrival on the same day", () => {
+    const lines = bookingEvent(booking({ time: "06:10", arrive_time: "23:30" }), undefined, PLAN, STAMP);
+    expect(value(lines, "DTEND")).toBe("20270104T233000");
+  });
+
+  it("falls back to the guess when the arrival time is unreadable", () => {
+    const lines = bookingEvent(booking({ time: "09:40", arrive_time: "lunchtime" }), undefined, PLAN, STAMP);
+    expect(value(lines, "DTEND")).toBe("20270104T114000");
+  });
+
+  it("ignores an arrival time with no departure to hang it on", () => {
+    const lines = bookingEvent(booking({ time: "", arrive_time: "11:55" }), undefined, PLAN, STAMP);
+    expect(value(lines, "DTSTART;VALUE=DATE")).toBe("20270104");
+    expect(value(lines, "DTEND;VALUE=DATE")).toBe("20270105");
   });
 
   it("rolls a late booking into the next day", () => {

@@ -11,7 +11,7 @@ export const SYNC_ID_PREFIX = "gm-";
 export const SYNC_SOURCE = "gmail";
 
 /** On a booking it already created, the sync may only move it in time or change its status. */
-export const SYNC_UPDATABLE = ["title", "date", "end_date", "time", "status"] as const;
+export const SYNC_UPDATABLE = ["title", "date", "end_date", "time", "arrive_time", "status"] as const;
 
 export const MAX_ROWS = 200;
 export const MAX_PROCESSED_IDS = 300;
@@ -82,6 +82,7 @@ export function normalizeBooking(input: Record<string, unknown>, planId: string)
     date: date_,
     end_date: end,
     time: str(input.time, 10, "time"),
+    arrive_time: str(input.arrive_time, 10, "arrive_time"),
     provider: str(input.provider, 60, "provider"),
     cost: money(input.cost, "cost"),
     confirmation: str(input.confirmation, 40, "confirmation"),
