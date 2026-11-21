@@ -1,4 +1,6 @@
-# Gap Semester Trips: notes for Claude
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 31 → Florence base ~Jan 5–Mar 15 with weekend trips → solo SE Asia/Australia ~Mar 16–May 28 → home for a June internship). Used by Alex and his girlfriend, mostly on phones while travelling.
 
@@ -7,16 +9,26 @@ Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 
 - `npm test` and `npm run build` must both pass before every push, since a push is a deploy.
 
 ## Commands
-- `npm run dev` — local dev (needs `.env.local`, see `.env.example`)
-- `npm test` — vitest for `lib/logic.ts`; add a test when changing date, Schengen or budget logic
-- `npm run build` — must pass before pushing; Vercel deploys `main`
+- `npm run dev` — local dev (needs `.env.local`, see `.env.example`). The service worker only registers in a production build, so test offline with `npm run build && npm start`.
+- `npm test` — vitest, two suites: `lib/logic.test.ts` (dates, Schengen, budget, tasks, and `lib/sync.ts`) and `lib/ics.test.ts` (the calendar feed). Add a test when changing date, Schengen or budget logic.
+  - one file: `npx vitest run lib/ics.test.ts`
+  - one test by name: `npx vitest run -t "ends a stay on the check-out day"`
+  - watch while working: `npx vitest`
+- `npm run build` — must pass before pushing; Vercel deploys `main`. There is no lint script; `npx tsc --noEmit` is the fast typecheck when you don't need a full build.
+
+## Deploying, and the migration trap
+A push to `main` deploys within a minute, but migrations are **not** applied automatically — they are pasted into the Supabase SQL editor by hand. So a change that both reads a new column and ships to production puts the live app ahead of the database, and anything touching that column fails until the SQL is run. This has bitten twice. When adding a column:
+- Reads can be made safe by selecting `*` rather than naming columns (this is why `TripApp` loads plans with `select("*")`).
+- Writes cannot. A new field in an insert or update breaks saving — and breaks the nightly Gmail sync, which posts the same rows — until the migration lands. Say so prominently when handing over the SQL.
 
 ## Stack and structure
 - Next.js App Router, React 19, TypeScript, plain CSS (`app/globals.css`). No UI library; keep it that way unless asked.
 - Supabase via `@supabase/supabase-js`, browser-only client in `lib/supabase.ts`. Email + password sign-in, open sign-up (enable it in Supabase → Authentication → Sign In / Providers); an account with no plan lands on `Onboarding`. Data access is protected by row-level security on `plan_members` (see `supabase/migrations/0001_init.sql`). Members are `owner`, `editor` or `viewer`: reads go through `is_plan_member`, every write through `can_edit_plan`, so a viewer is blocked server-side as well as in the UI (`canEditPlan` in `lib/logic.ts` gates the controls). Schema changes go in a new numbered migration file, never by editing 0001.
-- Pure logic lives in `lib/logic.ts`; components stay thin.
+- Pure logic lives in `lib/logic.ts`; components stay thin. `lib/ics.ts` (calendar output) and `lib/sync.ts` (the shapes and guards the Gmail sync must satisfy) are pure too, and both are unit-tested — `lib/ics.ts` runs on the server for the feed and in the browser for the per-booking button, so it must not use Node-only APIs (`TextEncoder`, not `Buffer`).
+- `TripApp.tsx` is the one stateful component. Everything modal goes through a single `View` union (`trip` | `booking` | `trip-form` | `booking-form` | `people` | null) rendered into one `Sheet`; add a case there rather than a new overlay. It also subscribes to a Supabase realtime channel per plan (`plan-${planId}`) covering `trips`, `bookings`, `tasks` and `sync_status`, and reloads the lot on any change, so a tick on one phone appears on the other — a new table needs `alter publication supabase_realtime add table …` in its migration to behave the same way. The same effect reloads on reconnect and when the tab becomes visible, which is why you'll see repeat fetches while debugging.
+- Offline/cache keys in localStorage: `gst:plan` and `gst:role` remember the last plan and the member's role so the UI can render before the network answers; `gst:cache:<planId>` holds the last loaded data. All reads are wrapped in try/catch because a PWA in private mode can throw.
 - To-do list: `tasks` table (0006), in the Home sidebar above All trips (the two tabs are Home and Bookings). Bucketed by due date with `taskGroup`; viewers can read it but can't tick anything, same `can_edit_plan` rule as the rest.
-- Gmail sync: a daily scheduled Claude session reads Gmail and POSTs to `app/api/sync/route.ts`, which writes with the Supabase service key. The route, not the prompt, is the guard: it only inserts rows whose id starts with `gm-`, and on an existing row changes only `SYNC_UPDATABLE` and only when `source = 'gmail'`, so hand-edited bookings are safe. Needs `SYNC_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_URL` set on Vercel (never `NEXT_PUBLIC_*`).
+- Gmail sync: a daily scheduled Claude session reads Gmail and POSTs to `app/api/sync/route.ts`, which writes with the Supabase service key. The route, not the prompt, is the guard: it only inserts rows whose id starts with `gm-`, and on an existing row changes only `SYNC_UPDATABLE` and only when `source = 'gmail'`, so hand-edited bookings are safe. Needs `SYNC_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_URL` set on Vercel (never `NEXT_PUBLIC_*`). The prompt that drives it is **not in this repo** — it is a Claude scheduled task ("Trip app Gmail sync") bound to one session, so changing the booking fields the sync should populate means editing that task's prompt as well as the code.
 - Calendar feed: `app/calendar/[token]/route.ts` serves a plan as iCalendar at `/calendar/<token>.ics`, built by `lib/ics.ts`, so it can be subscribed to from Google Calendar, Apple Calendar or Outlook. It reads with the same service key as the sync, so it needs no new environment variable. The token is `plans.calendar_token` (0008): 64 random characters, the feed's only credential, not writable through the API (column-level grants) and replaced by `rotate_calendar_token`. Times are *floating* — a booking's `time` is text and the app never records a zone, so pinning one would be a guess. Every member can see the link; editors and the owner can replace it.
 - Google refreshes a subscribed URL only every 8–24 hours and ignores `REFRESH-INTERVAL`, so each booking also has an "Add to calendar" button (`AddToCalendar` in `components/ui.tsx`) that builds a one-event file in the browser for anything imminent.
 - Offline: `public/sw.js` caches the app shell; `TripApp.tsx` keeps the last loaded data in localStorage and disables editing while offline.
@@ -39,6 +51,9 @@ Shared trip planner PWA for Alex's Jan–May 2027 gap semester (London from Dec 
 - Every booking row starts with a `TypeTile` (`components/ui.tsx`): a square icon tile tinted by the booking's category.
 - Fonts: Plus Jakarta Sans throughout (700/800 for headings, tight tracking); IBM Plex Mono only for confirmation codes. Numbers use `font-variant-numeric: tabular-nums` rather than a mono face.
 - Must work at 390px wide with no sideways scroll, and respect safe-area insets (it runs full-screen on iPhone).
+
+## README
+`README.md` is the setup guide, and it predates 0007 — it still says there is exactly one plan, that sign-ups are off, and that a stranger sees a "private" message. All three are wrong now. Don't take it as a description of current behaviour, and don't copy from it.
 
 ## Don't
 - Commit `.env*` files or real booking data (confirmation codes, phone numbers).
