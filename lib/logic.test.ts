@@ -25,7 +25,7 @@ import {
   viewRange,
   viewTitle,
 } from "./logic";
-import { normalizeBooking, processedIds, rowsOf, SyncError, updatableFields } from "./sync";
+import { normalizeBooking, processedIds, rowsOf, sharedTripFor, SyncError, updatableFields, type SharedTrip } from "./sync";
 import type { Task } from "./types";
 import type { Booking, Trip } from "./types";
 
@@ -294,5 +294,48 @@ describe("rangeMonths", () => {
   it("lists every month the plan touches", () => {
     expect(rangeMonths({ start: "2026-12-31", end: "2027-03-15" })).toEqual(["2026-12", "2027-01", "2027-02", "2027-03"]);
     expect(rangeMonths({ start: "2027-02-03", end: "2027-02-20" })).toEqual(["2027-02"]);
+  });
+});
+
+describe("filing Gmail bookings into shared trips", () => {
+  const rome: SharedTrip = { plan_id: "g1", id: "rome", start_date: "2027-02-12", end_date: "2027-02-14" };
+  const italy: SharedTrip = { plan_id: "g2", id: "italy", start_date: "2027-02-01", end_date: "2027-02-28" };
+  const own = new Map([
+    ["florence", "base" as const],
+    ["dublin", "weekend" as const],
+  ]);
+  const bk = (p: Partial<{ date: string | null; end_date: string | null; type: Booking["type"]; trip_id: string | null }>) => ({
+    date: "2027-02-13",
+    end_date: null,
+    type: "food" as Booking["type"],
+    trip_id: null,
+    ...p,
+  });
+
+  it("files a booking during a shared trip under it", () => {
+    expect(sharedTripFor(bk({}), [rome], own)).toBe(rome);
+    expect(sharedTripFor(bk({ date: "2027-02-15" }), [rome], own)).toBeNull();
+  });
+  it("takes the trip's first and last days", () => {
+    expect(sharedTripFor(bk({ date: "2027-02-12" }), [rome], own)).toBe(rome);
+    expect(sharedTripFor(bk({ date: "2027-02-14" }), [rome], own)).toBe(rome);
+  });
+  it("counts an overnight journey by the day it lands, but not a stay by its check-out", () => {
+    expect(sharedTripFor(bk({ type: "flight", date: "2027-02-11", end_date: "2027-02-12" }), [rome], own)).toBe(rome);
+    expect(sharedTripFor(bk({ type: "stay", date: "2027-02-09", end_date: "2027-02-12" }), [rome], own)).toBeNull();
+  });
+  it("prefers the shortest covering trip", () => {
+    expect(sharedTripFor(bk({}), [italy, rome], own)).toBe(rome);
+  });
+  it("overrides the base, but never a specific trip someone chose", () => {
+    expect(sharedTripFor(bk({ trip_id: "florence" }), [rome], own)).toBe(rome);
+    expect(sharedTripFor(bk({ trip_id: "dublin" }), [rome], own)).toBeNull();
+  });
+  it("follows a trip that has since been shared, whatever its dates", () => {
+    expect(sharedTripFor(bk({ trip_id: "rome", date: "2027-03-01" }), [rome], own)).toBe(rome);
+  });
+  it("leaves undated bookings and trips without dates alone", () => {
+    expect(sharedTripFor(bk({ date: null }), [rome], own)).toBeNull();
+    expect(sharedTripFor(bk({}), [{ ...rome, start_date: null }], own)).toBeNull();
   });
 });
