@@ -138,3 +138,41 @@ export function rowsOf(value: unknown, field: string): Record<string, unknown>[]
     return v as Record<string, unknown>;
   });
 }
+
+/** A trip in a group plan (0010) the sync's owner can edit — somewhere a new booking may be filed. */
+export type SharedTrip = { plan_id: string; id: string; start_date: string | null; end_date: string | null };
+
+const JOURNEYS: BookingType[] = ["flight", "train", "bus"];
+
+/**
+ * Which shared trip a new booking from Gmail belongs in, or null to keep it in the owner's plan.
+ *
+ * - Filed by id under a trip that has since been shared: that trip.
+ * - Filed under one of the owner's own trips other than a base: left there, since someone chose it.
+ * - Otherwise (no trip, or only the long-running base): the shared trip whose dates cover the day
+ *   it happens, or for a flight, train or bus the day it lands, so the overnight flight out counts.
+ *   When several cover it, the shortest wins, as the most specific; then the later start; then id,
+ *   so the choice is stable from run to run.
+ */
+export function sharedTripFor(
+  b: { date: string | null; end_date: string | null; type: BookingType; trip_id: string | null },
+  shared: SharedTrip[],
+  ownTripKinds: Map<string, TripKind>,
+): SharedTrip | null {
+  if (b.trip_id) {
+    const named = shared.find((t) => t.id === b.trip_id);
+    if (named) return named;
+    const kind = ownTripKinds.get(b.trip_id);
+    if (kind && kind !== "base") return null;
+  }
+  const days = [b.date, JOURNEYS.includes(b.type) ? b.end_date : null].filter((d): d is string => !!d);
+  if (!days.length) return null;
+  const covering = shared.filter((t) => {
+    if (!t.start_date) return false;
+    const end = t.end_date || t.start_date;
+    return days.some((d) => d >= t.start_date! && d <= end);
+  });
+  const length = (t: SharedTrip) => Date.parse(t.end_date || t.start_date!) - Date.parse(t.start_date!);
+  covering.sort((x, y) => length(x) - length(y) || y.start_date!.localeCompare(x.start_date!) || x.id.localeCompare(y.id));
+  return covering[0] ?? null;
+}

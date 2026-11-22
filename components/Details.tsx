@@ -12,6 +12,7 @@ export function TripDetail({
   onAddBooking,
   onEdit,
   onDelete,
+  external,
 }: {
   trip: Trip;
   bookings: Booking[];
@@ -20,6 +21,8 @@ export function TripDetail({
   onAddBooking: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Set when this is a shared trip from another plan, shown here on your own calendar. */
+  external?: { name: string; onOpen: () => void };
 }) {
   const days = trip.start_date ? dayNum(tripEnd(trip)!) - dayNum(trip.start_date) + 1 : 0;
   const list = bookings.filter((b) => b.trip_id === trip.id).sort((a, b) => (a.date || "9").localeCompare(b.date || "9"));
@@ -49,8 +52,16 @@ export function TripDetail({
           </>
         )}
       </dl>
-      <div className="section-t">Bookings</div>
-      <div className="mini-bk">
+      {external && (
+        <div className="row-actions">
+          <span className="fine">Shared trip · its bookings, notes and costs live in {external.name}.</span>
+          <button className="btn primary small" onClick={external.onOpen}>
+            Open shared trip
+          </button>
+        </div>
+      )}
+      {!external && <div className="section-t">Bookings</div>}
+      {!external && <div className="mini-bk">
         {list.length === 0 && <p className="empty" style={{ padding: "4px 0" }}>No bookings on this trip yet.</p>}
         {list.map((b) => (
           <button key={b.id} onClick={() => onOpenBooking(b.id)}>
@@ -59,8 +70,8 @@ export function TripDetail({
             <BookingPill status={b.status} />
           </button>
         ))}
-      </div>
-      {canEdit && (
+      </div>}
+      {canEdit && !external && (
         <div className="row-actions">
           <button className="btn primary small" onClick={onAddBooking}>
             + Booking

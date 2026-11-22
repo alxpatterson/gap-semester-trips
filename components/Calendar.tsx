@@ -16,7 +16,9 @@ import {
   KIND_ORDER,
   KINDS,
   money,
+  MONTHS_LONG,
   nights,
+  rangeMonths,
   shiftAnchor,
   timeSpan,
   tripsOn,
@@ -57,16 +59,17 @@ export function CalendarPanel({
   onTrip: (id: string) => void;
   onBooking: (id: string) => void;
 }) {
-  const step = view === "month" ? "month" : view === "week" ? "week" : "day";
+  const all = view === "all";
+  const step = view === "month" || all ? "month" : view === "week" ? "week" : "day";
   return (
     <div className="panel">
       <div className="monthbar">
-        <h2>{viewTitle(view, anchor)}</h2>
+        <h2>{all ? fmtRange(range.start, range.end) : viewTitle(view, anchor)}</h2>
         <div className="navs">
-          <button className="btn" aria-label={`Previous ${step}`} disabled={!inPlanRange(view, shiftAnchor(view, anchor, -1), range)} onClick={() => onAnchor(shiftAnchor(view, anchor, -1))}>
+          <button className="btn" aria-label={`Previous ${step}`} disabled={all || !inPlanRange(view, shiftAnchor(view, anchor, -1), range)} onClick={() => onAnchor(shiftAnchor(view, anchor, -1))}>
             ‹
           </button>
-          <button className="btn" aria-label={`Next ${step}`} disabled={!inPlanRange(view, shiftAnchor(view, anchor, 1), range)} onClick={() => onAnchor(shiftAnchor(view, anchor, 1))}>
+          <button className="btn" aria-label={`Next ${step}`} disabled={all || !inPlanRange(view, shiftAnchor(view, anchor, 1), range)} onClick={() => onAnchor(shiftAnchor(view, anchor, 1))}>
             ›
           </button>
           <div className="tabs seg" role="group" aria-label="Calendar view">
@@ -79,7 +82,18 @@ export function CalendarPanel({
         </div>
       </div>
 
-      {view === "month" ? (
+      {all ? (
+        <div className="allview">
+          {rangeMonths(range).map((m) => (
+            <section key={m} className="allmonth">
+              <button className="allhead" onClick={() => { onAnchor(`${m}-01` < range.start ? range.start : `${m}-01`); onView("month"); }}>
+                {MONTHS_LONG[+m.slice(5) - 1]} {m.slice(0, 4)}
+              </button>
+              <MonthGrid month={m} trips={trips} today={today} onTrip={onTrip} />
+            </section>
+          ))}
+        </div>
+      ) : view === "month" ? (
         <MonthGrid month={anchor.slice(0, 7)} trips={trips} today={today} onTrip={onTrip} />
       ) : view === "week" ? (
         <WeekGrid anchor={anchor} trips={trips} bookings={bookings} today={today} onTrip={onTrip} onBooking={onBooking} />
@@ -312,12 +326,15 @@ export function TripRail({
   loaded,
   today,
   onTrip,
+  sharedIn,
 }: {
   trips: Trip[];
   bookings: Booking[];
   loaded: boolean;
   today: string;
   onTrip: (id: string) => void;
+  /** Trips from a shared (group) plan, by id → that plan's name, labelled so they read as shared. */
+  sharedIn?: Record<string, string>;
 }) {
   const list = [...trips].sort((a, b) => (a.start_date || "9").localeCompare(b.start_date || "9"));
   return (
@@ -340,6 +357,7 @@ export function TripRail({
                 <span className="t">{t.title}</span>
                 <span className={`pill ${t.status}`}>{t.status}</span>
                 <span className="d">
+                  {sharedIn?.[t.id] && "Shared · "}
                   {t.start_date ? fmtRange(t.start_date, t.end_date) : "No dates yet"}
                   {n > 0 && ` · ${n} booking${n > 1 ? "s" : ""}`}
                 </span>
