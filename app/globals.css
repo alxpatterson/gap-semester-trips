@@ -5,6 +5,8 @@
   --accent: #A3D9C0; --accent-ink: #1E4234;
   --k-base: #A3D9C0; --k-weekend: #F0CDA0; --k-travel: #AEC8EC; --k-other: #D3CCC4; --k-event: #D9C2EA;
   --good: #A3D9C0; --warn: #F0CDA0; --bad: #F3B6AF;
+  /* The map's own ground: sea cool enough to read as water beside the warm neutral everywhere else. */
+  --map-sea: #E3EAEF; --map-land: #DDD7CF;
   --tint-ink: #2B241F;   /* text on a solid pastel, dark in both modes */
   --link: #2F6B55;       /* the accent where it has to read as text */
   --alert: #B5564E;      /* over budget, delete — soft but readable */
@@ -25,6 +27,7 @@
     --accent: #9FD9BE; --accent-ink: #15332A;
     --k-base: #9FD9BE; --k-weekend: #EDC79A; --k-travel: #A8C3E8; --k-other: #CFC7BF; --k-event: #D4BCE6;
     --good: #9FD9BE; --warn: #EDC79A; --bad: #F0B0A9;
+    --map-sea: #141A20; --map-land: #35302A;
     --link: #9FD9BE;
     --alert: #E79A93;
     --tint: 24%;
@@ -247,6 +250,54 @@ a { color: var(--link); }
   .ticket { grid-template-columns: auto minmax(0, 1fr); row-gap: 8px; }
   .ticket .side { grid-column: 2; flex-direction: row; justify-content: flex-start; align-items: center; flex-wrap: wrap; }
 }
+
+/* Map */
+/* The world in one SVG, panned and zoomed by moving its viewBox; see components/WorldMap.tsx. */
+.wm { position: relative; height: clamp(300px, 52vh, 560px); border-radius: var(--r-md); overflow: hidden; background: var(--map-sea); }
+.wm-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.wm-svg:active { cursor: grabbing; }
+.wm-waiting { display: grid; place-items: center; text-align: center; padding: 24px; color: var(--muted); font-size: 13px; background: var(--soft); }
+
+.wm-country { fill: var(--map-land); stroke: var(--map-sea); stroke-width: 1; vector-effect: non-scaling-stroke; }
+/* Where you are and where you've been share a hue; what's ahead is the travel blue, as on the calendar. */
+.wm-country.v-been, .wm-country.v-now { fill: var(--k-base); }
+/* Where you are today is outlined in ink, which reads against the pastel in either theme. Kept
+   thin on purpose: at world zoom Italy is a few pixels across, and a heavy line swallows it. */
+.wm-country.v-now { stroke: var(--ink); stroke-width: 1.2; }
+.wm-country.v-booked { fill: var(--k-travel); }
+.wm-country.v-idea { fill: url(#wm-idea); }
+.wm-country.on { stroke: var(--ink); stroke-width: 2; }
+.wm-idea-bg { fill: var(--map-land); }
+.wm-idea-fg { fill: var(--k-weekend); }
+
+/* Countries too small to tap — Monaco, Singapore, Malta — get a dot instead of an outline. */
+.wm-dot { stroke: var(--surface); stroke-width: 1.5; vector-effect: non-scaling-stroke; fill: var(--k-base); }
+.wm-dot.v-booked { fill: var(--k-travel); }
+.wm-dot.v-idea { fill: var(--k-weekend); }
+.wm-dot.v-now, .wm-dot.on { stroke: var(--ink); stroke-width: 2; }
+.wm-label { fill: var(--ink); font-family: var(--display); font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+
+.wm-tools { position: absolute; left: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.wm-tools .btn { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(6px); box-shadow: var(--shadow-sm); }
+.wm-zoom { display: inline-flex; gap: 4px; }
+.wm-zoom .btn { width: 32px; text-align: center; padding-inline: 0; font-weight: 700; }
+
+/* The legend reuses the calendar's swatch; the key for ideas is hatched like an idea on the grid. */
+.legend .wm-key { width: 14px; height: 10px; border-radius: 1px; display: inline-block; background: var(--k-base); }
+.legend .wm-key.v-booked { background: var(--k-travel); }
+.legend .wm-key.v-idea { background: repeating-linear-gradient(135deg, var(--k-weekend) 0 4px, var(--map-land) 4px 7px); }
+.legend .wm-key.v-now { background: var(--k-base); box-shadow: 0 0 0 1.5px var(--ink) inset; }
+.map-note { margin-top: 10px; }
+
+/* The same countries as a list: easier to read on a phone, and the only way in from a keyboard. */
+.country-item { --kc: var(--k-base); }
+.country-item.v-booked { --kc: var(--k-travel); }
+.country-item.v-idea { --kc: var(--k-weekend); }
+.country-item.on { background: var(--soft); }
+.country-item .pill, .pill.country-pill { background: color-mix(in srgb, var(--k-base) var(--tint), transparent); color: var(--ink); }
+.country-item.v-booked .pill, .pill.country-pill.v-booked { background: color-mix(in srgb, var(--k-travel) var(--tint), transparent); }
+.country-item.v-idea .pill, .pill.country-pill.v-idea { background: color-mix(in srgb, var(--k-weekend) var(--tint), transparent); }
+.country-bk { display: flex; flex-direction: column; gap: 6px; }
 
 /* To-do list */
 .todo-panel h3 { font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: -.02em; margin: 0 0 10px; }

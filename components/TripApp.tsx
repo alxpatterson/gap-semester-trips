@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { canEditPlan, fmtRange, initialAnchor, localToday, maxSchengenWindow, money, MONTHS, planRange, type CalView } from "@/lib/logic";
+import { countryName, countryVisits } from "@/lib/places";
 import type { Booking, BookingPerson, Category, Expense, Member, MemberRole, Plan, PlanKind, Profile, SyncStatus, Task, Trip, TripNote } from "@/lib/types";
 import { nameOf } from "@/lib/split";
 import BudgetPanel, { BudgetChip } from "./BudgetPanel";
@@ -14,6 +15,7 @@ import { CalendarPanel, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
 import { BookingForm, TripForm, type BookingInput, type TripInput } from "./Forms";
 import InstallHint from "./InstallHint";
+import MapTab, { CountryDetail } from "./MapTab";
 import { Onboarding, RecoveryScreen, SetPassword, SetupNeeded, SignIn } from "./SignIn";
 import { Balances, BookingPeople, ExpenseDetail, ExpenseForm, ProfileForm, TripSocial, type ExpenseInput } from "./Social";
 import { Sheet, useToast } from "./ui";
@@ -24,6 +26,7 @@ type View =
   | { kind: "trip-form"; trip?: Partial<Trip> }
   | { kind: "booking-form"; booking?: Partial<Booking> }
   | { kind: "people" }
+  | { kind: "country"; code: string }
   | { kind: "expense"; id: string }
   | { kind: "expense-form"; expense?: Partial<Expense> }
   | null;
@@ -188,7 +191,7 @@ function PlanView({
   const [online, setOnline] = useState(true);
 
   const today = localToday();
-  const [tab, setTab] = useState<"home" | "book">("home");
+  const [tab, setTab] = useState<"home" | "map" | "book">("home");
   const [calView, setCalView] = useState<CalView>("month");
   const [anchor, setAnchor] = useState<string | null>(null);
   const [category, setCategory] = useState<CategoryFilter>("all");
@@ -297,6 +300,9 @@ function PlanView({
     [social.sharedTrips, memberships, isGroup, trips, plan?.name],
   );
   const schengen = maxSchengenWindow(allTrips);
+  // What the Map tab draws, and what the country sheet reads — worked out once, from the same
+  // trips the calendar shows, so a shared trip colours its country in too.
+  const map = useMemo(() => countryVisits(allTrips, today), [allTrips, today]);
   const withFriends = social.on && social.members.length > 1;
   const people = withFriends ? social.members.map((m) => ({ email: m.email.toLowerCase(), label: m.email.toLowerCase() === me ? "Me" : nameOf(m.email, social.profiles) })) : [];
   // A group plan is created with no budget; showing "$0 left" there would only confuse.
@@ -610,6 +616,9 @@ function PlanView({
           <button role="tab" aria-selected={tab === "home"} onClick={() => setTab("home")}>
             Home
           </button>
+          <button role="tab" aria-selected={tab === "map"} onClick={() => setTab("map")}>
+            Map
+          </button>
           <button role="tab" aria-selected={tab === "book"} onClick={() => setTab("book")}>
             Bookings
           </button>
@@ -633,7 +642,16 @@ function PlanView({
         </div>
       )}
 
-      {tab === "home" ? (
+      {tab === "map" ? (
+        <MapTab
+          visits={map.visits}
+          unplaced={map.unplaced}
+          loaded={loaded}
+          selected={view?.kind === "country" ? view.code : null}
+          onCountry={(code) => setView({ kind: "country", code })}
+          onTrip={(id) => setView({ kind: "trip", id })}
+        />
+      ) : tab === "home" ? (
         <section className="cal-layout">
           <CalendarPanel
             view={calView}
