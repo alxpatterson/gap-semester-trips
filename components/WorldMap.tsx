@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { COUNTRIES, MAP_HEIGHT, MAP_WIDTH, projectLonLat, type Country } from "@/lib/countries";
 import { COUNTRY_PATHS } from "@/lib/world-map";
 import type { CountryVisit } from "@/lib/places";
@@ -11,6 +11,11 @@ import type { CountryVisit } from "@/lib/places";
  *
  * This file pulls in the outlines, which are the better part of 64KB, so MapTab loads it on
  * demand rather than it riding along on the way to the calendar.
+ *
+ * On how fast it feels: the drawing itself runs at 60fps in a production build even on a
+ * throttled phone, so nothing here tries to dodge React. What makes a map feel slow is the input
+ * mapping — a wheel notch that barely zooms, a drag that stops dead, a button that teleports —
+ * so that is what the wheel normalising, the flick and the tweens below are for.
  */
 
 /** How far in the map goes: the whole world across, down to a country or two. */
@@ -34,15 +39,46 @@ const CHAR_WIDTH = 0.56;
 /** A tap that travelled further than this was a drag, and must not open the country under it. */
 const TAP_SLOP = 8;
 
+// ---------- Feel ----------
+/**
+ * A wheel event's deltaY is in whatever unit the browser fancies: pixels in Chrome, lines in
+ * Firefox, pages rarely. Reading it raw meant a Firefox notch zoomed half a percent.
+ */
+const WHEEL_UNIT = [1, 16, 400];
+/** Zoom per pixel of wheel. A 100px mouse notch comes out at about 35%. */
+const WHEEL_ZOOM = 0.003;
+/** A trackpad pinch arrives as a wheel event with ctrl held and very small deltas. */
+const PINCH_BOOST = 4;
+/** No single event may zoom more than this, so a flung wheel can't jump the map. */
+const WHEEL_MAX_PX = 200;
+/** Below this speed a lifted finger isn't a flick, it's a stop. Pixels per millisecond. */
+const FLICK_MIN = 0.25;
+/** How quickly a flick runs out: the time constant of the decay, in milliseconds. */
+const FLICK_DECAY = 170;
+/** How long a tween to somewhere else on the map takes. */
+const TWEEN_MS = 420;
+/** Two taps closer together than this, and nearer than DOUBLE_SLOP, mean zoom in. */
+const DOUBLE_MS = 320;
+const DOUBLE_SLOP = 28;
+/** The country card floats beside what it describes; below this the panel is too narrow for
+ *  that to be anything but in the way, so it sits along the bottom instead. */
+const POP_WIDTH = 300;
+const POP_DOCK_BELOW = 470;
+
 export type WorldMapProps = {
   visits: CountryVisit[];
   selected: string | null;
   onPick: (code: string) => void;
+  /** Bump the count to fly to a country — what the list below the map does when you pick one. */
+  focus?: { code: string; n: number };
+  /** The country card, placed over the map next to whatever it describes. */
+  popup?: ReactNode;
 };
 
 type View = { x: number; y: number; w: number; h: number };
 type Point = { x: number; y: number };
 
+const BY_CODE = new Map(COUNTRIES.map((c) => [c.code, c] as const));
 const zoomedWidth = (w: number) => Math.min(Math.max(w, MAP_WIDTH / MAX_ZOOM), MAP_WIDTH);
 
 /**
@@ -71,7 +107,7 @@ function fitRegion(region: typeof EUROPE, aspect: number): View {
 
 /** Everywhere there's a trip, with room around it. Falls back to Europe when there's nothing yet. */
 function fitVisits(visits: CountryVisit[], aspect: number): View {
-  const points = visits.map((v) => COUNTRIES.find((c) => c.code === v.code)).filter((c) => !!c);
+  const points = visits.map((v) => BY_CODE.get(v.code)).filter((c) => !!c);
   if (!points.length) return fitRegion(EUROPE, aspect);
   const pad = MAP_WIDTH / 22;
   const xs = points.map((c) => c.x);
@@ -81,7 +117,25 @@ function fitVisits(visits: CountryVisit[], aspect: number): View {
   return fitBox({ x, y, w: Math.max(...xs) + pad - x, h: Math.max(...ys) + pad - y }, aspect);
 }
 
-export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
+/** A country filling a comfortable part of the screen, for flying to one from the list. */
+function fitCountry(c: Country, aspect: number): View {
+  const w = zoomedWidth(Math.max(Math.sqrt(Math.max(c.area, 60)) * 7, MAP_WIDTH / 11));
+  return clampView({ x: c.x - w / 2, y: c.y - w / aspect / 2, w, h: w / aspect }, aspect);
+}
+
+/**
+ * A step along the way from one view to another. The width moves geometrically and the middle
+ * linearly, which is what keeps a long zoom feeling like one even movement rather than a rush
+ * at one end — the usual trick for animating a map.
+ */
+function tween(a: View, b: View, t: number, aspect: number): View {
+  const w = a.w * Math.pow(b.w / a.w, t);
+  const cx = a.x + a.w / 2 + (b.x + b.w / 2 - (a.x + a.w / 2)) * t;
+  const cy = a.y + a.h / 2 + (b.y + b.h / 2 - (a.y + a.h / 2)) * t;
+  return clampView({ x: cx - w / 2, y: cy - w / aspect / 2, w, h: w / aspect }, aspect);
+}
+
+export default function WorldMap({ visits, selected, onPick, focus, popup }: WorldMapProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View>(() => fitRegion(EUROPE, 3 / 2));
@@ -90,9 +144,13 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
 
   const aspect = size.w && size.h ? size.w / size.h : 3 / 2;
   // Gestures run from callbacks that outlive the render they were made in, so they read the shape
-  // of the panel from here rather than closing over it.
+  // of the panel, and where the map is, from here rather than closing over them.
   const aspectRef = useRef(aspect);
   aspectRef.current = aspect;
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
 
   useEffect(() => {
     const el = boxRef.current;
@@ -109,6 +167,14 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
     if (!touched.current && size.w > 0) setView(fitRegion(EUROPE, size.w / size.h));
   }, [size]);
 
+  // Anything still moving the map: a flick running out, or a tween on its way somewhere.
+  const motion = useRef<number | null>(null);
+  const stop = useCallback(() => {
+    if (motion.current !== null) cancelAnimationFrame(motion.current);
+    motion.current = null;
+  }, []);
+  useEffect(() => stop, [stop]);
+
   /**
    * Every move goes through here, and always as "from where we are, go there". Two wheel notches
    * in one frame then compound properly instead of the second undoing the first.
@@ -118,11 +184,60 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
     setView((from) => clampView(typeof next === "function" ? next(from) : next, aspectRef.current));
   }, []);
 
-  // ---------- Pan and pinch ----------
+  /** Go somewhere else on the map over time rather than cutting to it. */
+  const flyTo = useCallback(
+    (to: View, ms = TWEEN_MS) => {
+      stop();
+      touched.current = true;
+      const from = viewRef.current;
+      const start = performance.now();
+      const step = () => {
+        const p = Math.min(1, (performance.now() - start) / ms);
+        // Ease out: quick off the mark, settling rather than stopping.
+        setView(tween(from, to, 1 - Math.pow(1 - p, 3), aspectRef.current));
+        motion.current = p < 1 ? requestAnimationFrame(step) : null;
+      };
+      motion.current = requestAnimationFrame(step);
+    },
+    [stop],
+  );
+
+  // Flying to a country the list picked. The count, not the code, is what re-triggers it, so
+  // picking the same country twice still brings the map back to it.
+  const flownTo = useRef(-1);
+  useEffect(() => {
+    if (!focus || !size.w || focus.n === flownTo.current) return;
+    flownTo.current = focus.n;
+    const c = BY_CODE.get(focus.code);
+    if (c) flyTo(fitCountry(c, size.w / size.h));
+  }, [focus, size, flyTo]);
+
+  /** Zoom about a point on screen, the anchor staying under it. */
+  const zoomAt = useCallback(
+    (factor: number, client: Point, animate = false) => {
+      const el = boxRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const fx = (client.x - rect.left) / rect.width;
+      const fy = (client.y - rect.top) / rect.height;
+      const from = viewRef.current;
+      const w = zoomedWidth(from.w * factor);
+      const h = w / aspectRef.current;
+      const to = { x: from.x + fx * (from.w - w), y: from.y + fy * (from.h - h), w, h };
+      if (animate) flyTo(clampView(to, aspectRef.current), 260);
+      else move(to);
+    },
+    [flyTo, move],
+  );
+
+  // ---------- Pan, pinch and flick ----------
   const pointers = useRef(new Map<number, Point>());
   const pinch = useRef<{ dist: number; mid: Point } | null>(null);
   // How far the fingers travelled, so a drag that ends on a country doesn't count as tapping it.
   const travelled = useRef(0);
+  // The last moments of a drag, which is all a flick needs to know how fast it was going.
+  const trail = useRef<{ t: number; x: number; y: number }[]>([]);
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
 
   const spread = () => {
     const [a, b] = [...pointers.current.values()];
@@ -130,9 +245,15 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    (e.target as Element).setPointerCapture?.(e.pointerId);
+    stop();
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Capture keeps a drag alive when the finger leaves the map, but it throws for a pointer the
+    // browser isn't tracking, and losing the rest of this handler would kill the gesture.
+    try {
+      (e.target as Element).setPointerCapture?.(e.pointerId);
+    } catch {}
     travelled.current = 0;
+    trail.current = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
     pinch.current = pointers.current.size === 2 ? spread() : null;
   };
 
@@ -144,6 +265,8 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
     const rect = boxRef.current.getBoundingClientRect();
 
     if (pointers.current.size === 1) {
+      trail.current.push({ t: performance.now(), x: e.clientX, y: e.clientY });
+      if (trail.current.length > 6) trail.current.shift();
       const dx = (e.clientX - was.x) / rect.width;
       const dy = (e.clientY - was.y) / rect.height;
       move((v) => ({ ...v, x: v.x - dx * v.w, y: v.y - dy * v.h }));
@@ -166,9 +289,52 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
     });
   };
 
+  /** Carry on in the direction the finger was going, slowing to a stop. */
+  const flick = () => {
+    const trailing = trail.current;
+    if (trailing.length < 2) return;
+    const last = trailing[trailing.length - 1];
+    const first = trailing.find((s) => last.t - s.t < 90) ?? trailing[0];
+    const dt = last.t - first.t;
+    if (dt < 8) return;
+    let vx = (last.x - first.x) / dt;
+    let vy = (last.y - first.y) / dt;
+    if (Math.hypot(vx, vy) < FLICK_MIN) return;
+    let previous = performance.now();
+    const step = () => {
+      const now = performance.now();
+      const stepance = Math.min(now - previous, 48);
+      previous = now;
+      const { w: pw, h: ph } = sizeRef.current;
+      if (!pw) return;
+      move((v) => ({ ...v, x: v.x - (vx * stepance * v.w) / pw, y: v.y - (vy * stepance * v.h) / ph }));
+      const decay = Math.exp(-stepance / FLICK_DECAY);
+      vx *= decay;
+      vy *= decay;
+      motion.current = Math.hypot(vx, vy) > 0.03 ? requestAnimationFrame(step) : null;
+    };
+    motion.current = requestAnimationFrame(step);
+  };
+
   const onPointerUp = (e: React.PointerEvent) => {
+    const lifted = pointers.current.get(e.pointerId);
     pointers.current.delete(e.pointerId);
     pinch.current = pointers.current.size === 2 ? spread() : null;
+    if (pointers.current.size > 0 || !lifted) return;
+
+    // A second tap in the same spot means zoom in, the way every other map works.
+    if (travelled.current < TAP_SLOP) {
+      const now = performance.now();
+      const before = lastTap.current;
+      if (before && now - before.t < DOUBLE_MS && Math.hypot(lifted.x - before.x, lifted.y - before.y) < DOUBLE_SLOP) {
+        lastTap.current = null;
+        zoomAt(1 / 2, lifted, true);
+        return;
+      }
+      lastTap.current = { t: now, x: lifted.x, y: lifted.y };
+      return;
+    }
+    flick();
   };
 
   // Wheel has to be bound by hand: React's onWheel is passive, and a passive listener can't stop
@@ -178,22 +344,25 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const fx = (e.clientX - rect.left) / rect.width;
-      const fy = (e.clientY - rect.top) / rect.height;
-      move((v) => {
-        const w = zoomedWidth(v.w * Math.exp(e.deltaY * 0.0015));
-        const h = w / aspectRef.current;
-        return { x: v.x + fx * (v.w - w), y: v.y + fy * (v.h - h), w, h };
-      });
+      stop();
+      // deltaY arrives in pixels, lines or pages depending on the browser, and a trackpad pinch
+      // comes through as a small delta with ctrl held.
+      let px = e.deltaY * (WHEEL_UNIT[e.deltaMode] ?? 1);
+      if (e.ctrlKey) px *= PINCH_BOOST;
+      px = Math.max(-WHEEL_MAX_PX, Math.min(WHEEL_MAX_PX, px));
+      zoomAt(Math.exp(px * WHEEL_ZOOM), { x: e.clientX, y: e.clientY });
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [move]);
+  }, [zoomAt, stop]);
 
   /** The buttons and the arrow keys work from the middle of whatever is on screen. */
-  const zoomBy = (factor: number) =>
-    move((v) => ({ x: v.x + (v.w * (1 - factor)) / 2, y: v.y + (v.h * (1 - factor)) / 2, w: v.w * factor, h: v.h * factor }));
+  const zoomBy = (factor: number) => {
+    const el = boxRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    zoomAt(factor, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, true);
+  };
 
   const NUDGE: Record<string, Point> = {
     ArrowLeft: { x: -1, y: 0 },
@@ -206,13 +375,14 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
     const step = NUDGE[e.key];
     if (step) {
       e.preventDefault();
+      stop();
       move((v) => ({ ...v, x: v.x + (step.x * v.w) / 8, y: v.y + (step.y * v.h) / 8 }));
     } else if (e.key === "+" || e.key === "=") {
       e.preventDefault();
-      zoomBy(1 / 1.6);
+      zoomBy(1 / 1.7);
     } else if (e.key === "-") {
       e.preventDefault();
-      zoomBy(1.6);
+      zoomBy(1.7);
     }
   };
 
@@ -258,13 +428,6 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
   const zoomedIn = view.w < MAP_WIDTH / 3.5;
 
   /**
-   * Every country is named, but only where its name fits. Candidates are taken in the order that
-   * matters — somewhere with a trip on it first, then by how much of the screen the country fills
-   * — and each one is dropped if its text would land on a name already placed. So the map stays
-   * readable at a glance of the world and fills in with smaller countries as it's zoomed into,
-   * the way an atlas does, rather than printing 234 names on top of each other.
-   */
-  /**
    * Where you are today, outlined over the top of every fill so a neighbour can't paint across
    * it. It fades out as the map zooms out: at world scale Italy is a few pixels of coastline and
    * a dark line around it reads as a scribble rather than a country.
@@ -273,11 +436,18 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
     if (!size.w) return [];
     return visits
       .filter((v) => v.status === "now" && COUNTRY_PATHS[v.code])
-      .map((v) => ({ code: v.code, d: COUNTRY_PATHS[v.code], area: COUNTRIES.find((c) => c.code === v.code)?.area ?? 0 }))
+      .map((v) => ({ code: v.code, d: COUNTRY_PATHS[v.code], area: BY_CODE.get(v.code)?.area ?? 0 }))
       .map((v) => ({ ...v, fade: Math.min(1, ((v.area * size.w * size.w) / (view.w * view.w)) / 1200) }))
       .filter((v) => v.fade > 0.04);
   }, [visits, view.w, size.w]);
 
+  /**
+   * Every country is named, but only where its name fits. Candidates are taken in the order that
+   * matters — somewhere with a trip on it first, then by how much of the screen the country fills
+   * — and each one is dropped if its text would land on a name already placed. So the map stays
+   * readable at a glance of the world and fills in with smaller countries as it's zoomed into,
+   * the way an atlas does, rather than printing 234 names on top of each other.
+   */
   const labels = useMemo(() => {
     if (!size.w) return [];
     const px = view.w / size.w;
@@ -314,6 +484,28 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
     return out;
   }, [view, size, statuses, zoomedIn]);
 
+  /**
+   * Where to put the open country's card. On a wide panel it floats beside the country, above it
+   * where there's room below and vice versa, nudged clear of the edges. On a narrow one it docks
+   * along the bottom, which is both easier to read and never covers the country you just tapped.
+   */
+  const placement = useMemo(() => {
+    const c = selected ? BY_CODE.get(selected) : null;
+    if (!c || !size.w) return null;
+    if (size.w < POP_DOCK_BELOW) return { docked: true as const };
+    const left = ((c.x - view.x) / view.w) * size.w;
+    const top = ((c.y - view.y) / view.h) * size.h;
+    const w = Math.min(POP_WIDTH, size.w - 16);
+    const above = top > size.h * 0.45;
+    return {
+      docked: false as const,
+      w,
+      left: Math.min(Math.max(left - w / 2, 8), size.w - w - 8),
+      above,
+      offset: above ? Math.max(8, size.h - top + 14) : Math.max(8, top + 14),
+    };
+  }, [selected, view, size]);
+
   return (
     <div className="wm" ref={boxRef}>
       <svg
@@ -343,7 +535,7 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
         </g>
         <g>
           {visits.map((v) => {
-            const c = COUNTRIES.find((x) => x.code === v.code);
+            const c = BY_CODE.get(v.code);
             if (!c || (c.area >= DOT_BELOW && COUNTRY_PATHS[c.code])) return null;
             return (
               <circle key={v.code} cx={c.x} cy={c.y} r={dotR} className={`wm-dot v-${v.status}${selected === v.code ? " on" : ""}`} onClick={() => tap(v.code)}>
@@ -361,21 +553,30 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
         </g>
       </svg>
 
+      {popup && placement && (
+        <div
+          className={placement.docked ? "wm-pop-wrap docked" : `wm-pop-wrap ${placement.above ? "above" : "below"}`}
+          style={placement.docked ? undefined : { left: placement.left, width: placement.w, [placement.above ? "bottom" : "top"]: placement.offset }}
+        >
+          {popup}
+        </div>
+      )}
+
       <div className="wm-tools">
-        <button className="btn small" onClick={() => move(fitRegion(EUROPE, aspect))} title="Back to Europe">
+        <button className="btn small" onClick={() => flyTo(fitRegion(EUROPE, aspect))} title="Back to Europe">
           Europe
         </button>
-        <button className="btn small" onClick={() => move(fitVisits(visits, aspect))} disabled={!visits.length} title="Fit every country with a trip on it">
+        <button className="btn small" onClick={() => flyTo(fitVisits(visits, aspect))} disabled={!visits.length} title="Fit every country with a trip on it">
           My trips
         </button>
-        <button className="btn small" onClick={() => move({ x: 0, y: 0, w: MAP_WIDTH, h: MAP_WIDTH / aspect })} title="The whole world">
+        <button className="btn small" onClick={() => flyTo({ x: 0, y: 0, w: MAP_WIDTH, h: MAP_WIDTH / aspect })} title="The whole world">
           World
         </button>
         <span className="wm-zoom">
-          <button className="btn small" onClick={() => zoomBy(1 / 1.6)} aria-label="Zoom in">
+          <button className="btn small" onClick={() => zoomBy(1 / 1.7)} aria-label="Zoom in">
             +
           </button>
-          <button className="btn small" onClick={() => zoomBy(1.6)} aria-label="Zoom out">
+          <button className="btn small" onClick={() => zoomBy(1.7)} aria-label="Zoom out">
             −
           </button>
         </span>

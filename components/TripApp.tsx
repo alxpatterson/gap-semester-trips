@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { canEditPlan, fmtRange, initialAnchor, localToday, maxSchengenWindow, money, MONTHS, planRange, type CalView } from "@/lib/logic";
-import { countryName, countryVisits } from "@/lib/places";
+import { countryVisits } from "@/lib/places";
 import type { Booking, BookingPerson, Category, Expense, Member, MemberRole, Plan, PlanKind, Profile, SyncStatus, Task, Trip, TripNote } from "@/lib/types";
 import { nameOf } from "@/lib/split";
 import BudgetPanel, { BudgetChip } from "./BudgetPanel";
@@ -15,7 +15,7 @@ import { CalendarPanel, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
 import { BookingForm, TripForm, type BookingInput, type TripInput } from "./Forms";
 import InstallHint from "./InstallHint";
-import MapTab, { CountryDetail } from "./MapTab";
+import MapTab from "./MapTab";
 import { Onboarding, RecoveryScreen, SetPassword, SetupNeeded, SignIn } from "./SignIn";
 import { Balances, BookingPeople, ExpenseDetail, ExpenseForm, ProfileForm, TripSocial, type ExpenseInput } from "./Social";
 import { Sheet, useToast } from "./ui";
@@ -300,8 +300,8 @@ function PlanView({
     [social.sharedTrips, memberships, isGroup, trips, plan?.name],
   );
   const schengen = maxSchengenWindow(allTrips);
-  // What the Map tab draws, and what the country sheet reads — worked out once, from the same
-  // trips the calendar shows, so a shared trip colours its country in too.
+  // What the Map tab draws. The open country is held in the View union like every other
+  // selection, but its card is drawn on the map itself rather than in the sheet.
   const map = useMemo(() => countryVisits(allTrips, today), [allTrips, today]);
   const withFriends = social.on && social.members.length > 1;
   const people = withFriends ? social.members.map((m) => ({ email: m.email.toLowerCase(), label: m.email.toLowerCase() === me ? "Me" : nameOf(m.email, social.profiles) })) : [];
@@ -646,10 +646,17 @@ function PlanView({
         <MapTab
           visits={map.visits}
           unplaced={map.unplaced}
+          bookings={bookings}
           loaded={loaded}
+          today={today}
+          currency={plan?.currency ?? "USD"}
+          canEdit={canEdit}
+          sharedIn={sharedIn}
           selected={view?.kind === "country" ? view.code : null}
-          onCountry={(code) => setView({ kind: "country", code })}
+          onCountry={(code) => setView(code ? { kind: "country", code } : null)}
           onTrip={(id) => setView({ kind: "trip", id })}
+          onBooking={(id) => setView({ kind: "booking", id })}
+          onAddTrip={(place) => setView({ kind: "trip-form", trip: { place } })}
         />
       ) : tab === "home" ? (
         <section className="cal-layout">
