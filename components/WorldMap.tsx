@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { COUNTRIES, MAP_HEIGHT, MAP_WIDTH, projectLonLat } from "@/lib/countries";
+import { COUNTRIES, MAP_HEIGHT, MAP_WIDTH, projectLonLat, type Country } from "@/lib/countries";
 import { COUNTRY_PATHS } from "@/lib/world-map";
 import type { CountryVisit } from "@/lib/places";
 
@@ -19,8 +19,18 @@ const MAX_ZOOM = 14;
 const DOT_BELOW = 650;
 /** Where the map opens: western Europe out to Istanbul, with the Alps in the middle. */
 const EUROPE = { west: -12, east: 42, north: 62, south: 33 };
-/** How many square pixels a country has to cover before its name is worth writing across it. */
-const LABEL_ABOVE_PX = 2800;
+/** How many square pixels a country has to cover before its name is even considered. */
+const LABEL_ABOVE_PX = 600;
+/** A country with a trip on it earns its name sooner — that's what the map is for. */
+const LABEL_VISITED_ABOVE_PX = 150;
+/** Breathing room around a label, as a fraction of its size, so two never read as one word. */
+const LABEL_GAP = 1.14;
+/** The strip along the bottom the Europe / My trips / World buttons sit in, in CSS pixels. */
+const TOOLBAR_PX = 50;
+/** Labels drawn at once. A cap keeps a wide zoom from putting a hundred names on screen. */
+const MAX_LABELS = 70;
+/** Plus Jakarta Sans bold, as a fraction of the font size — close enough to reserve space with. */
+const CHAR_WIDTH = 0.56;
 /** A tap that travelled further than this was a drag, and must not open the country under it. */
 const TAP_SLOP = 8;
 
@@ -247,6 +257,63 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
   const stripe = view.w / 55;
   const zoomedIn = view.w < MAP_WIDTH / 3.5;
 
+  /**
+   * Every country is named, but only where its name fits. Candidates are taken in the order that
+   * matters — somewhere with a trip on it first, then by how much of the screen the country fills
+   * — and each one is dropped if its text would land on a name already placed. So the map stays
+   * readable at a glance of the world and fills in with smaller countries as it's zoomed into,
+   * the way an atlas does, rather than printing 234 names on top of each other.
+   */
+  /**
+   * Where you are today, outlined over the top of every fill so a neighbour can't paint across
+   * it. It fades out as the map zooms out: at world scale Italy is a few pixels of coastline and
+   * a dark line around it reads as a scribble rather than a country.
+   */
+  const hereNow = useMemo(() => {
+    if (!size.w) return [];
+    return visits
+      .filter((v) => v.status === "now" && COUNTRY_PATHS[v.code])
+      .map((v) => ({ code: v.code, d: COUNTRY_PATHS[v.code], area: COUNTRIES.find((c) => c.code === v.code)?.area ?? 0 }))
+      .map((v) => ({ ...v, fade: Math.min(1, ((v.area * size.w * size.w) / (view.w * view.w)) / 1200) }))
+      .filter((v) => v.fade > 0.04);
+  }, [visits, view.w, size.w]);
+
+  const labels = useMemo(() => {
+    if (!size.w) return [];
+    const px = view.w / size.w;
+    const r = px * 7;
+    // The buttons along the bottom are the first thing on the map, so nothing is placed under
+    // them: reserving the strip is the same collision test everything else goes through.
+    const seen = [{ x1: view.x, x2: view.x + view.w, y1: view.y + view.h - TOOLBAR_PX * px, y2: view.y + view.h }];
+    const out: { c: Country; x: number; y: number; size: number; visited: boolean }[] = [];
+
+    const candidates = COUNTRIES.filter((c) => c.x >= view.x && c.x <= view.x + view.w && c.y >= view.y && c.y <= view.y + view.h)
+      .map((c) => ({
+        c,
+        visited: statuses.has(c.code),
+        dot: c.area < DOT_BELOW || !COUNTRY_PATHS[c.code],
+        onScreen: (c.area * size.w * size.w) / (view.w * view.w),
+      }))
+      .filter((x) => x.onScreen > (x.visited ? LABEL_VISITED_ABOVE_PX : LABEL_ABOVE_PX) || (x.dot && zoomedIn))
+      .sort((a, b) => Number(b.visited) - Number(a.visited) || b.onScreen - a.onScreen);
+
+    for (const { c, visited, dot } of candidates) {
+      if (out.length >= MAX_LABELS) break;
+      const size = px * (visited ? 11 : 10);
+      const half = (c.name.length * size * CHAR_WIDTH * LABEL_GAP) / 2;
+      // Nudged off the edge rather than let it hang half off the map; it moves by at most half
+      // its own width, so it still sits beside the country it names.
+      const x = Math.min(Math.max(c.x, view.x + half), view.x + view.w - half);
+      // A visited country's dot sits on the label point, so its name goes underneath it.
+      const y = Math.max(c.y + (dot && visited ? r * 2.4 : 0), view.y + size);
+      const box = { x1: x - half, x2: x + half, y1: y - size * 0.6, y2: y + size * 0.6 };
+      if (seen.some((p) => box.x1 < p.x2 && box.x2 > p.x1 && box.y1 < p.y2 && box.y2 > p.y1)) continue;
+      seen.push(box);
+      out.push({ c, x, y, size, visited });
+    }
+    return out;
+  }, [view, size, statuses, zoomedIn]);
+
   return (
     <div className="wm" ref={boxRef}>
       <svg
@@ -269,27 +336,28 @@ export default function WorldMap({ visits, selected, onPick }: WorldMapProps) {
           </pattern>
         </defs>
         {outlines}
+        <g className="wm-now" aria-hidden="true">
+          {hereNow.map((v) => (
+            <path key={v.code} d={v.d} style={{ opacity: v.fade }} />
+          ))}
+        </g>
         <g>
           {visits.map((v) => {
             const c = COUNTRIES.find((x) => x.code === v.code);
-            if (!c) return null;
-            const dot = c.area < DOT_BELOW || !COUNTRY_PATHS[c.code];
-            const onScreen = (c.area * size.w * size.w) / (view.w * view.w);
+            if (!c || (c.area >= DOT_BELOW && COUNTRY_PATHS[c.code])) return null;
             return (
-              <g key={v.code}>
-                {dot && (
-                  <circle cx={c.x} cy={c.y} r={dotR} className={`wm-dot v-${v.status}${selected === v.code ? " on" : ""}`} onClick={() => tap(v.code)}>
-                    <title>{c.name}</title>
-                  </circle>
-                )}
-                {(onScreen > LABEL_ABOVE_PX || (dot && zoomedIn)) && (
-                  <text x={c.x} y={c.y + (dot ? dotR * 2.4 : perPx * 4)} className="wm-label" style={{ fontSize: perPx * 11 }}>
-                    {c.name}
-                  </text>
-                )}
-              </g>
+              <circle key={v.code} cx={c.x} cy={c.y} r={dotR} className={`wm-dot v-${v.status}${selected === v.code ? " on" : ""}`} onClick={() => tap(v.code)}>
+                <title>{c.name}</title>
+              </circle>
             );
           })}
+        </g>
+        <g>
+          {labels.map(({ c, x, y, size, visited }) => (
+            <text key={c.code} x={x} y={y} className={`wm-label${visited ? "" : " faint"}`} style={{ fontSize: size }}>
+              {c.name}
+            </text>
+          ))}
         </g>
       </svg>
 

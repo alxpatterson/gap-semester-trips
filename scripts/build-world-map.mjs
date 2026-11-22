@@ -152,18 +152,26 @@ const area = (ring) => {
 };
 
 /**
- * Where to put a country's dot or label: the midpoint of the widest run of inside-the-shape space,
- * found by sweeping horizontal lines down the ring. A plain centroid is no good here — it falls in
- * the sea for anything crescent-shaped, like Croatia or Vietnam — and this point is inside the
- * outline by construction.
+ * Where to put a country's dot or label: the midpoint of a wide run of inside-the-shape space,
+ * found by sweeping horizontal lines down the ring. A plain centroid is no good here — it falls
+ * in the sea for anything crescent-shaped, like Croatia or Vietnam — and a scanline midpoint is
+ * inside the outline by construction.
+ *
+ * Widest alone isn't right either. Sweden is widest across Lapland and Chile across the Atacama,
+ * so the plain version labels both countries in a corner nobody looks at, and pans them off the
+ * screen the moment the map is zoomed into the part that matters. So a chord is scored on width
+ * but loses up to two thirds of it for sitting at the top or bottom of the country, which brings
+ * the label back towards the middle without ever putting it outside the shape.
  */
 function labelPoint(ring) {
   const ys = ring.map((p) => p[1]);
   const top = Math.min(...ys);
   const bottom = Math.max(...ys);
   if (bottom === top) return ring[0];
+  const middle = (top + bottom) / 2;
+  const reach = (bottom - top) / 2;
   let best = [ring[0], -1];
-  const lines = 24;
+  const lines = 48;
   for (let k = 1; k < lines; k++) {
     const y = top + ((bottom - top) * k) / lines;
     // Where the scanline crosses the outline, left to right.
@@ -175,10 +183,11 @@ function labelPoint(ring) {
       xs.push(ax + ((y - ay) / (by - ay)) * (bx - ax));
     }
     xs.sort((a, b) => a - b);
-    // Pairs of crossings bound the inside; keep the widest one found anywhere on the shape.
+    const central = 1 - (0.66 * Math.abs(y - middle)) / reach;
+    // Pairs of crossings bound the inside; keep the best-scoring one found anywhere on the shape.
     for (let i = 0; i + 1 < xs.length; i += 2) {
-      const span = xs[i + 1] - xs[i];
-      if (span > best[1]) best = [[(xs[i] + xs[i + 1]) / 2, y], span];
+      const score = (xs[i + 1] - xs[i]) * central;
+      if (score > best[1]) best = [[(xs[i] + xs[i + 1]) / 2, y], score];
     }
   }
   return best[0];

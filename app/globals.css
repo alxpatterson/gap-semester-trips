@@ -253,7 +253,10 @@ a { color: var(--link); }
 
 /* Map */
 /* The world in one SVG, panned and zoomed by moving its viewBox; see components/WorldMap.tsx. */
-.wm { position: relative; height: clamp(300px, 52vh, 560px); border-radius: var(--r-md); overflow: hidden; background: var(--map-sea); }
+.wm { position: relative; height: clamp(360px, 64vh, 680px); border-radius: var(--r-md); overflow: hidden; background: var(--map-sea); }
+/* With room to spare, give it plenty: the map is the whole point of this tab. On a phone it
+   stops at 64vh so there is always page left to scroll by — dragging the map itself pans it. */
+@media (min-width: 900px) { .wm { height: clamp(520px, 78vh, 1020px); } }
 .wm-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .wm-svg:active { cursor: grabbing; }
 .wm-waiting { display: grid; place-items: center; text-align: center; padding: 24px; color: var(--muted); font-size: 13px; background: var(--soft); }
@@ -261,12 +264,12 @@ a { color: var(--link); }
 .wm-country { fill: var(--map-land); stroke: var(--map-sea); stroke-width: 1; vector-effect: non-scaling-stroke; }
 /* Where you are and where you've been share a hue; what's ahead is the travel blue, as on the calendar. */
 .wm-country.v-been, .wm-country.v-now { fill: var(--k-base); }
-/* Where you are today is outlined in ink, which reads against the pastel in either theme. Kept
-   thin on purpose: at world zoom Italy is a few pixels across, and a heavy line swallows it. */
-.wm-country.v-now { stroke: var(--ink); stroke-width: 1.2; }
+/* Where you are today is outlined in ink, which reads against the pastel in either theme. It is
+   drawn as its own layer over the fills (see .wm-now) so a neighbour can't paint across it. */
 .wm-country.v-booked { fill: var(--k-travel); }
 .wm-country.v-idea { fill: url(#wm-idea); }
 .wm-country.on { stroke: var(--ink); stroke-width: 2; }
+.wm-now path { fill: none; stroke: var(--ink); stroke-width: 1.6; vector-effect: non-scaling-stroke; pointer-events: none; }
 .wm-idea-bg { fill: var(--map-land); }
 .wm-idea-fg { fill: var(--k-weekend); }
 
@@ -275,7 +278,10 @@ a { color: var(--link); }
 .wm-dot.v-booked { fill: var(--k-travel); }
 .wm-dot.v-idea { fill: var(--k-weekend); }
 .wm-dot.v-now, .wm-dot.on { stroke: var(--ink); stroke-width: 2; }
+/* Every country is named. The ones with a trip on them read first; the rest sit back so they
+   place the map without competing with it. The halo keeps both legible over any fill. */
 .wm-label { fill: var(--ink); font-family: var(--display); font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.wm-label.faint { fill: var(--muted); font-weight: 600; }
 
 .wm-tools { position: absolute; left: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
 .wm-tools .btn { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(6px); box-shadow: var(--shadow-sm); }
