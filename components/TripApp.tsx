@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
-import { canEditPlan, fmtRange, initialAnchor, localToday, maxSchengenWindow, money, MONTHS, planRange, type CalView } from "@/lib/logic";
+import { canEditPlan, fmtRange, initialAnchor, localToday, money, MONTHS, planRange, type CalView } from "@/lib/logic";
 import { countryVisits } from "@/lib/places";
 import type { Booking, BookingPerson, Category, CountryMark, Expense, MarkKind, Member, MemberRole, Plan, PlanKind, Profile, SyncStatus, Task, Trip, TripNote } from "@/lib/types";
 import { nameOf } from "@/lib/split";
@@ -345,7 +345,6 @@ function PlanView({
     }),
     [social.sharedTrips, memberships, isGroup, trips, plan?.name],
   );
-  const schengen = maxSchengenWindow(allTrips);
   // What the Map tab draws. The open country is held in the View union like every other
   // selection, but its card is drawn on the map itself rather than in the sheet.
   // The map counts either this trip (plus anything shared into it) or every trip you're on.
@@ -686,12 +685,6 @@ function PlanView({
         <div className="chips">
           {showBudget && plan && <BudgetChip plan={plan} bookings={bookings} loaded={loaded} onOpen={() => setTab("book")} />}
           {syncChip}
-          {allTrips.some((t) => t.schengen) && (
-            <span className={`chip ${schengen > 90 ? "bad" : schengen > 80 ? "warn" : ""}`} title="Most planned days inside the Schengen area in any 180-day window (limit 90)">
-              <span className="dot" />
-              Schengen <b>{loaded ? schengen : "–"}</b> / 90 days
-            </span>
-          )}
         </div>
         <div className="tabs" role="tablist">
           <button role="tab" aria-selected={tab === "home"} onClick={() => setTab("home")}>
@@ -710,8 +703,11 @@ function PlanView({
               + Trip
             </button>
           )}
-          <button className="btn" onClick={() => setView({ kind: "people" })}>
-            Trip
+          <button className="btn icon" aria-label="Trip settings" title="Trip settings" onClick={() => setView({ kind: "people" })}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+            </svg>
           </button>
         </div>
       </header>
