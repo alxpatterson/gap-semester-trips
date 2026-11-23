@@ -28,6 +28,7 @@ export default function Tasks({
   people?: { email: string; label: string }[];
   me?: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
   const [showDone, setShowDone] = useState(false);
@@ -50,8 +51,15 @@ export default function Tasks({
   return (
     <section className="panel todo-panel" aria-label="To do">
       <h3>
-        To do{loaded && openTasks(tasks) > 0 && <span className="n"> {openTasks(tasks)}</span>}
+        <button className="todo-head" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+          <span>
+            To do{loaded && openTasks(tasks) > 0 && <span className="n"> {openTasks(tasks)}</span>}
+          </span>
+          <span className="caret" aria-hidden="true" />
+        </button>
       </h3>
+      {expanded && (
+        <>
       {canEdit && (
         <form
           className="todo-add"
@@ -133,6 +141,8 @@ export default function Tasks({
         <button className="btn ghost small todo-toggle" onClick={() => setShowDone((v) => !v)}>
           {showDone ? "Hide" : "Show"} {done.length} done
         </button>
+      )}
+        </>
       )}
     </section>
   );

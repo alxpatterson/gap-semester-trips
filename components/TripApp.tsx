@@ -621,15 +621,34 @@ function PlanView({
     );
   } else if (view?.kind === "people") {
     sheet = (
-      <Sheet title="Trip settings" onClose={() => setView(null)}>
+      <Sheet title="Profile" onClose={() => setView(null)}>
+        <Account sb={sb} email={email} profile={social.profiles.find((p) => p.email === me)} social={social.on} onSaveProfile={saveProfile} toast={toast} />
+        <div className="section-t">Your trips</div>
+        <ul className="my-trips">
+          {memberships.map((m) => (
+            <li key={m.plan_id}>
+              <button
+                className={m.plan_id === planId ? "on" : ""}
+                onClick={() => {
+                  setView(null);
+                  if (m.plan_id !== planId) onPickPlan(m.plan_id);
+                }}
+              >
+                <span className="tick" aria-hidden="true">{m.plan_id === planId ? "✓" : ""}</span>
+                <span className="nm">{m.name}</span>
+                {m.kind === "group" ? <span className="sub">Shared</span> : m.role !== "owner" ? <span className="sub">Guest</span> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="row-actions">
+          <button className="btn small" onClick={() => setView({ kind: "new-plan" })}>
+            + New trip
+          </button>
+        </div>
+        <div className="section-t">Trip settings{plan ? ` · ${plan.name}` : ""}</div>
         <PlanSettings sb={sb} plan={plan} canEdit={canEdit} onSaved={load} toast={toast} />
         {plan && <CalendarFeed sb={sb} plan={plan} canEdit={canEdit} onRotated={load} toast={toast} />}
-        {social.on && (
-          <>
-            <div className="section-t">Your name</div>
-            <ProfileForm profile={social.profiles.find((p) => p.email === me)} me={me} onSave={saveProfile} />
-          </>
-        )}
         <People sb={sb} planId={planId} email={email} role={role} toast={toast} />
       </Sheet>
     );
@@ -703,11 +722,8 @@ function PlanView({
               + Trip
             </button>
           )}
-          <button className="btn icon" aria-label="Trip settings" title="Trip settings" onClick={() => setView({ kind: "people" })}>
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-            </svg>
+          <button className="avatar" aria-label="Your profile and trip settings" title="Profile" onClick={() => setView({ kind: "people" })}>
+            {initialsOf(social.profiles.find((x) => x.email === me)?.display_name, me)}
           </button>
         </div>
       </header>
@@ -1007,6 +1023,65 @@ function PlanSettings({
   );
 }
 
+/** Up to two letters for the avatar: from the display name if there is one, else the email. */
+function initialsOf(name: string | null | undefined, email: string): string {
+  const words = (name?.trim() || email.split("@")[0].replace(/[._-]+/g, " ")).split(/\s+/).filter(Boolean);
+  const letters = words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? "?").slice(0, 2);
+  return letters.toUpperCase();
+}
+
+/** The top of the profile sheet: who you are, then the account actions. */
+function Account({
+  sb,
+  email,
+  profile,
+  social,
+  onSaveProfile,
+  toast,
+}: {
+  sb: SupabaseClient;
+  email: string;
+  profile: Profile | undefined;
+  social: boolean;
+  onSaveProfile: (p: { display_name: string; pay_handle: string }) => Promise<boolean>;
+  toast: (m: string) => void;
+}) {
+  const [changing, setChanging] = useState(false);
+  const me = email.toLowerCase();
+  return (
+    <>
+      <div className="account">
+        <span className="avatar big" aria-hidden="true">{initialsOf(profile?.display_name, me)}</span>
+        <div className="who">
+          <b>{profile?.display_name || me.split("@")[0]}</b>
+          <span>{email}</span>
+        </div>
+      </div>
+      {social && <ProfileForm profile={profile} me={me} onSave={onSaveProfile} />}
+      <div className="row-actions">
+        {!changing && (
+          <button className="btn small" onClick={() => setChanging(true)}>
+            Change password
+          </button>
+        )}
+        <button className="btn small" onClick={() => sb.auth.signOut()}>
+          Sign out
+        </button>
+      </div>
+      {changing && (
+        <SetPassword
+          sb={sb}
+          onDone={() => {
+            setChanging(false);
+            toast("Password changed");
+          }}
+          onCancel={() => setChanging(false)}
+        />
+      )}
+    </>
+  );
+}
+
 function People({
   sb,
   planId,
@@ -1024,8 +1099,6 @@ function People({
   const [invite, setInvite] = useState("");
   const [inviteRole, setInviteRole] = useState<Exclude<MemberRole, "owner">>("viewer");
   const [busy, setBusy] = useState(false);
-  const [changing, setChanging] = useState(false);
-
   const load = useCallback(async () => {
     const { data } = await sb.from("plan_members").select("email,role").eq("plan_id", planId).order("added_at");
     setMembers(data ?? []);
@@ -1109,28 +1182,6 @@ function People({
             {busy ? "Adding…" : "Add to plan"}
           </button>
         </form>
-      )}
-      <div className="section-t">Signed in as</div>
-      <div className="row-actions">
-        <span>{email}</span>
-        {!changing && (
-          <button className="btn small" onClick={() => setChanging(true)}>
-            Change password
-          </button>
-        )}
-        <button className="btn small" onClick={() => sb.auth.signOut()}>
-          Sign out
-        </button>
-      </div>
-      {changing && (
-        <SetPassword
-          sb={sb}
-          onDone={() => {
-            setChanging(false);
-            toast("Password changed");
-          }}
-          onCancel={() => setChanging(false)}
-        />
       )}
     </>
   );
