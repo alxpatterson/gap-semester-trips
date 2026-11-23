@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { canEditPlan, fmtRange, initialAnchor, localToday, money, MONTHS, planRange, type CalView } from "@/lib/logic";
@@ -216,7 +216,7 @@ function PlanView({
   const [online, setOnline] = useState(true);
 
   const today = localToday();
-  const [tab, setTab] = useState<"home" | "cal" | "map" | "book">("cal");
+  const [tab, setTab] = useState<"home" | "cal" | "map" | "book">("home");
   const [calView, setCalView] = useState<CalView>("month");
   const [anchor, setAnchor] = useState<string | null>(null);
   const [category, setCategory] = useState<CategoryFilter>("all");
@@ -482,8 +482,8 @@ function PlanView({
     setTab("book");
   };
 
-  // ---------- Sync chip ----------
-  let syncChip: React.ReactNode = null;
+  // ---------- Gmail sync status (shown in the profile sheet) ----------
+  let syncLine: React.ReactNode = null;
   if (sync?.last_run) {
     const t = new Date(sync.last_run);
     const isStale = Date.now() - t.getTime() > 3 * 864e5;
@@ -491,11 +491,17 @@ function PlanView({
     const title = sync.last_error
       ? `Last sync had a problem: ${sync.last_error}`
       : `Last sync added ${sync.added}, updated ${sync.updated}${sync.review ? `, ${sync.review} to check` : ""}. Runs daily.`;
-    syncChip = (
-      <span className={`chip ${cls}`} title={title}>
-        <span className="dot" />
-        Gmail synced {MONTHS[t.getMonth()]} {t.getDate()}
-      </span>
+    syncLine = (
+      <>
+        <div className="section-t">Gmail sync</div>
+        <div className="row-actions">
+          <span className={`chip ${cls}`}>
+            <span className="dot" />
+            Synced {MONTHS[t.getMonth()]} {t.getDate()}
+          </span>
+          <span className="empty" style={{ padding: 0 }}>{title}</span>
+        </div>
+      </>
     );
   }
 
@@ -640,7 +646,9 @@ function PlanView({
     sheet = (
       <Sheet title="Profile" onClose={() => setView(null)}>
         <Account sb={sb} email={email} profile={social.profiles.find((p) => p.email === me)} social={social.on} onSaveProfile={saveProfile} toast={toast} />
-        <div className="section-t">Your trips</div>
+        {syncLine}
+        <div className="section-t">Trip to show</div>
+        <p className="empty" style={{ padding: 0 }}>Pick the trip you want to see. The app opens to it next time too.</p>
         <ul className="my-trips">
           {memberships.map((m) => (
             <li key={m.plan_id}>
@@ -709,23 +717,15 @@ function PlanView({
     <div className="wrap">
       <header className="top">
         <div className="brand">
-          <TripPicker
-            name={plan?.name || "Trip planner"}
-            planId={planId}
-            memberships={memberships}
-            onPick={onPickPlan}
-            onNew={() => setView({ kind: "new-plan" })}
-            onSettings={() => setView({ kind: "people" })}
-          />
+          <button className="logo" aria-label="Home" title="Home" onClick={() => setTab("home")}>
+            <img src="/icons/icon-192.png" alt="" width={34} height={34} />
+            <span className="nm">{plan?.name || "Trip planner"}</span>
+          </button>
         </div>
         <div className="chips">
           {showBudget && plan && <BudgetChip plan={plan} bookings={bookings} loaded={loaded} onOpen={() => setTab("book")} />}
-          {syncChip}
         </div>
         <div className="tabs" role="tablist">
-          <button role="tab" aria-selected={tab === "home"} onClick={() => setTab("home")}>
-            Home
-          </button>
           <button role="tab" aria-selected={tab === "cal"} onClick={() => setTab("cal")}>
             Calendar
           </button>
@@ -865,83 +865,6 @@ function PlanView({
 }
 
 
-/**
- * Which trip you're looking at, and the way to start another. The name in the top left is the
- * button: tapping it lists every trip you're on, your own first, with a tick beside this one.
- *
- * Hand-rolled rather than a <select> because the menu holds actions as well as trips, and an
- * option that isn't a trip reads badly in a native picker.
- */
-function TripPicker({
-  name,
-  planId,
-  memberships,
-  onPick,
-  onNew,
-  onSettings,
-}: {
-  name: string;
-  planId: string;
-  memberships: Membership[];
-  onPick: (id: string) => void;
-  onNew: () => void;
-  onSettings: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent | TouchEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("pointerdown", away);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("pointerdown", away);
-      document.removeEventListener("keydown", key);
-    };
-  }, [open]);
-
-  const choose = (id: string) => {
-    setOpen(false);
-    if (id !== planId) onPick(id);
-  };
-
-  return (
-    <div className="picker" ref={box}>
-      <button className="plan-pick" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="nm">{name}</span>
-        <span className="caret" aria-hidden="true" />
-      </button>
-      {open && (
-        <div className="picker-menu" role="menu">
-          {memberships.length > 0 && <div className="picker-head">Your trips</div>}
-          {memberships.map((m) => (
-            <button key={m.plan_id} role="menuitem" className={m.plan_id === planId ? "on" : ""} onClick={() => choose(m.plan_id)}>
-              <span className="tick" aria-hidden="true">
-                {m.plan_id === planId ? "✓" : ""}
-              </span>
-              <span className="nm">{m.name}</span>
-              {m.kind === "group" ? <span className="sub">Shared</span> : m.role !== "owner" ? <span className="sub">Guest</span> : null}
-            </button>
-          ))}
-          <div className="picker-rule" />
-          <button role="menuitem" onClick={() => { setOpen(false); onNew(); }}>
-            <span className="tick" aria-hidden="true">+</span>
-            <span className="nm">New trip</span>
-          </button>
-          <button role="menuitem" onClick={() => { setOpen(false); onSettings(); }}>
-            <span className="tick" aria-hidden="true" />
-            <span className="nm">Trip settings</span>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** The things that used to be hardcoded: what the trip is called, when it runs, the budget. */
 function PlanSettings({
   sb,
@@ -1047,7 +970,10 @@ function PlanSettings({
 
 /** Up to two letters for the avatar: from the display name if there is one, else the email. */
 function initialsOf(name: string | null | undefined, email: string): string {
-  const words = (name?.trim() || email.split("@")[0].replace(/[._-]+/g, " ")).split(/\s+/).filter(Boolean);
+  let raw = name?.trim() || email.split("@")[0].replace(/[._\d-]+/g, " ");
+  // "Patterson, Alex" is written last-first: flip it so the initials still read first then last.
+  if (raw.includes(",")) raw = raw.split(",").map((x) => x.trim()).filter(Boolean).reverse().join(" ");
+  const words = raw.split(/\s+/).filter(Boolean);
   const letters = words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? "?").slice(0, 2);
   return letters.toUpperCase();
 }
