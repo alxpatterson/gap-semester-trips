@@ -510,6 +510,7 @@ function WeekGrid({
   onBooking,
   onOpenDay,
   onPickDays,
+  mini = false,
 }: {
   anchor: string;
   trips: Trip[];
@@ -519,6 +520,8 @@ function WeekGrid({
   onBooking: (id: string) => void;
   onOpenDay: (day: string) => void;
   onPickDays?: (start: string, end: string) => void;
+  /** The small copy on Home: all seven days fit the width, so nothing scrolls sideways. */
+  mini?: boolean;
 }) {
   const pick = useDayPick(onOpenDay, onPickDays);
   const peek = useDayPeek();
@@ -541,7 +544,7 @@ function WeekGrid({
 
   return (
     <div className="scroller" ref={scroller}>
-      <div className="wgrid" ref={pick.ref as React.RefObject<HTMLDivElement>} {...pick.bind} {...peek.bind}>
+      <div className={`wgrid ${mini ? "mini" : ""}`} ref={pick.ref as React.RefObject<HTMLDivElement>} {...pick.bind} {...peek.bind}>
         {days.map((d) => (
           <div key={`h-${d}`} data-day={d} data-peek={d} className={`wdow ${d === today ? "today" : ""} ${inSel(pick.sel, d) ? "sel" : ""}`}>
             <span>{DOWS[weekday(d)]}</span>
@@ -597,6 +600,65 @@ function WeekGrid({
         })}
       </div>
       {peek.peek && <DayPeek key={peek.peek.day} {...peek.peek} trips={trips} bookings={bookings} />}
+    </div>
+  );
+}
+
+/**
+ * Home's calendar: the week around the calendar's own anchor, smaller, so paging it here moves the
+ * Calendar tab too. A day opens hour by hour on the Calendar tab; the title opens the full week.
+ */
+export function HomeWeek({
+  anchor,
+  range,
+  trips,
+  bookings,
+  today,
+  onAnchor,
+  onOpenDay,
+  onOpenWeek,
+  onTrip,
+  onBooking,
+  onPickDays,
+}: {
+  anchor: string;
+  range: PlanRange;
+  trips: Trip[];
+  bookings: Booking[];
+  today: string;
+  onAnchor: (d: string) => void;
+  onOpenDay: (d: string) => void;
+  onOpenWeek: () => void;
+  onTrip: (id: string) => void;
+  onBooking: (id: string) => void;
+  onPickDays?: (start: string, end: string) => void;
+}) {
+  const prev = shiftAnchor("week", anchor, -1);
+  const next = shiftAnchor("week", anchor, 1);
+  const thisWeek = viewDays("week", anchor).includes(today);
+  const canToday = !thisWeek && today >= range.start && today <= range.end;
+  return (
+    <div className="panel home-week">
+      <div className="monthbar">
+        <h2>{viewTitle("week", anchor)}</h2>
+        <div className="navs">
+          {canToday && (
+            <button className="btn" onClick={() => onAnchor(today)}>
+              Today
+            </button>
+          )}
+          <button className="btn" aria-label="Previous week" disabled={!inPlanRange("week", prev, range)} onClick={() => onAnchor(prev)}>
+            ‹
+          </button>
+          <button className="btn" aria-label="Next week" disabled={!inPlanRange("week", next, range)} onClick={() => onAnchor(next)}>
+            ›
+          </button>
+          <button className="btn" onClick={onOpenWeek}>
+            Calendar
+          </button>
+        </div>
+      </div>
+      <WeekGrid mini anchor={anchor} trips={trips} bookings={bookings} today={today} onTrip={onTrip} onBooking={onBooking} onOpenDay={onOpenDay} onPickDays={onPickDays} />
     </div>
   );
 }

@@ -11,7 +11,7 @@ import BudgetPanel, { BudgetChip } from "./BudgetPanel";
 import CalendarFeed from "./CalendarFeed";
 import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
 import Tasks from "./Tasks";
-import { CalendarPanel, TripRail } from "./Calendar";
+import { CalendarPanel, HomeWeek, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
 import { BookingForm, PlanForm, TripForm, type BookingInput, type PlanInput, type TripInput } from "./Forms";
 import InstallHint from "./InstallHint";
@@ -806,6 +806,27 @@ function PlanView({
           }
         />
       ) : tab === "home" ? (
+        <div className="home">
+        <HomeWeek
+          anchor={day}
+          range={range}
+          trips={allTrips}
+          bookings={bookings}
+          today={today}
+          onAnchor={setAnchor}
+          onOpenDay={(d) => {
+            setAnchor(d);
+            setCalView("day");
+            setTab("cal");
+          }}
+          onOpenWeek={() => {
+            setCalView("week");
+            setTab("cal");
+          }}
+          onTrip={(id) => setView({ kind: "trip", id })}
+          onBooking={(id) => setView({ kind: "booking", id })}
+          onPickDays={canEdit ? (start, end) => setView({ kind: "day-pick", start, end }) : undefined}
+        />
         <section className="home-grid">
           <div className="side">
             <Tasks
@@ -848,6 +869,7 @@ function PlanView({
             />
           </div>
         </section>
+        </div>
       ) : (
         <>
           {showBudget && plan && <BudgetPanel plan={plan} bookings={bookings} loaded={loaded} onPickCategory={pickCategory} />}
