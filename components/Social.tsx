@@ -5,7 +5,7 @@
  * Thin views over lib/split.ts and lib/fx.ts; every write goes back through TripApp.
  */
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { BOOKING_TYPES, fmtDate, localToday, timeSpan } from "@/lib/logic";
+import { BOOKING_TYPES, JOURNEY_TYPES, fmtDate, localToday, timeSpan } from "@/lib/logic";
 import { convert, currencyChoices, ratesStale, totalIn, type Rates } from "@/lib/fx";
 import { allTransfers, balances, cents, nameOf, payLink, shareOf, splitEvenly, splitProblem, type Transfer } from "@/lib/split";
 import type { Booking, BookingPerson, Expense, Member, Profile, Share, Trip, TripNote } from "@/lib/types";
@@ -576,7 +576,7 @@ export function TripSocial({
   const name = (e: string) => (same(e, me) ? "You" : nameOf(e, profiles));
 
   const journeys = bookings
-    .filter((b) => b.trip_id === trip.id && (b.type === "flight" || b.type === "train" || b.type === "bus"))
+    .filter((b) => b.trip_id === trip.id && JOURNEY_TYPES.includes(b.type))
     .sort((a, b) => `${a.date ?? "9"} ${a.time}`.localeCompare(`${b.date ?? "9"} ${b.time}`));
   const tripNotes = notes.filter((n) => n.trip_id === trip.id).sort((a, b) => a.created_at.localeCompare(b.created_at));
   const tripCosts = expenses.filter((x) => x.trip_id === trip.id && x.kind === "expense");

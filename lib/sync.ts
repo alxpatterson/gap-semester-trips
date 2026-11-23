@@ -16,7 +16,7 @@ export const SYNC_UPDATABLE = ["title", "date", "end_date", "time", "arrive_time
 export const MAX_ROWS = 200;
 export const MAX_PROCESSED_IDS = 300;
 
-const BOOKING_TYPES: BookingType[] = ["stay", "flight", "train", "bus", "food", "activity", "other"];
+const BOOKING_TYPES: BookingType[] = ["stay", "flight", "train", "bus", "car", "boat", "food", "activity", "other"];
 const BOOKING_STATUSES: BookingStatus[] = ["todo", "booked", "review"];
 const TRIP_KINDS: TripKind[] = ["base", "weekend", "travel", "other"];
 const TRIP_STATUSES: TripStatus[] = ["idea", "planned", "booked"];
@@ -142,7 +142,7 @@ export function rowsOf(value: unknown, field: string): Record<string, unknown>[]
 /** A trip in a group plan (0010) the sync's owner can edit — somewhere a new booking may be filed. */
 export type SharedTrip = { plan_id: string; id: string; start_date: string | null; end_date: string | null };
 
-const JOURNEYS: BookingType[] = ["flight", "train", "bus"];
+const JOURNEYS: BookingType[] = ["flight", "train", "bus", "car", "boat"];
 
 /**
  * Which shared trip a new booking from Gmail belongs in, or null to keep it in the owner's plan.
@@ -150,7 +150,7 @@ const JOURNEYS: BookingType[] = ["flight", "train", "bus"];
  * - Filed by id under a trip that has since been shared: that trip.
  * - Filed under one of the owner's own trips other than a base: left there, since someone chose it.
  * - Otherwise (no trip, or only the long-running base): the shared trip whose dates cover the day
- *   it happens, or for a flight, train or bus the day it lands, so the overnight flight out counts.
+ *   it happens, or for a flight, train, bus, car or boat the day it lands, so the overnight flight out counts.
  *   When several cover it, the shortest wins, as the most specific; then the later start; then id,
  *   so the choice is stable from run to run.
  */

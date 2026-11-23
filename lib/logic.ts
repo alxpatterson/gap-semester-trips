@@ -12,11 +12,15 @@ export const BOOKING_TYPES: Record<BookingType, string> = {
   stay: "Stay / housing",
   flight: "Flight",
   train: "Train",
-  bus: "Bus / ferry",
+  bus: "Bus",
+  car: "Car",
+  boat: "Boat / ferry",
   food: "Food",
   activity: "Event",
   other: "Other",
 };
+/** The types that go somewhere: they get an arrival time and count as a journey. */
+export const JOURNEY_TYPES: BookingType[] = ["flight", "train", "bus", "car", "boat"];
 export const CATEGORIES: [Exclude<Category, "other">, string][] = [
   ["stays", "Stays"],
   ["transport", "Transport"],
@@ -26,7 +30,7 @@ export const CATEGORIES: [Exclude<Category, "other">, string][] = [
 
 export function categoryOf(type: BookingType): Category {
   if (type === "stay") return "stays";
-  if (type === "flight" || type === "train" || type === "bus") return "transport";
+  if (JOURNEY_TYPES.includes(type)) return "transport";
   if (type === "food") return "food";
   if (type === "activity") return "events";
   return "other";

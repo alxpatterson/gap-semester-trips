@@ -76,6 +76,8 @@ describe("budget", () => {
   it("maps booking types to the four filter categories", () => {
     expect(categoryOf("stay")).toBe("stays");
     expect(categoryOf("train")).toBe("transport");
+    expect(categoryOf("car")).toBe("transport");
+    expect(categoryOf("boat")).toBe("transport");
     expect(categoryOf("food")).toBe("food");
     expect(categoryOf("activity")).toBe("events");
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { BOOKING_TYPES, KINDS } from "@/lib/logic";
+import { BOOKING_TYPES, JOURNEY_TYPES, KINDS } from "@/lib/logic";
 import type { Booking, Trip } from "@/lib/types";
 
 export type TripInput = Pick<Trip, "title" | "kind" | "status" | "start_date" | "end_date" | "place" | "schengen" | "notes">;
@@ -130,7 +130,7 @@ export function BookingForm({
   const [error, setError] = useState("");
   // A journey's dates mean something different from a stay's, so the labels follow the type.
   const [type, setType] = useState<Booking["type"]>(booking?.type ?? "flight");
-  const journey = type === "flight" || type === "train" || type === "bus";
+  const journey = JOURNEY_TYPES.includes(type);
   const sortedTrips = [...trips].sort((a, b) => (a.start_date || "9").localeCompare(b.start_date || "9"));
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

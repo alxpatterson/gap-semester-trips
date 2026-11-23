@@ -74,7 +74,7 @@ export const icsLocal = (date: string, h: number, m: number) =>
   `${icsDate(date)}T${String(h).padStart(2, "0")}${String(m).padStart(2, "0")}00`;
 
 /** Fallback length for a timed booking with no arrival time — a guess, so keep it modest. */
-const HOURS: Record<Booking["type"], number> = { flight: 2, train: 2, bus: 2, activity: 2, food: 2, stay: 1, other: 1 };
+const HOURS: Record<Booking["type"], number> = { flight: 2, train: 2, bus: 2, car: 2, boat: 2, activity: 2, food: 2, stay: 1, other: 1 };
 
 const plus = (date: string, h: number, m: number, hours: number) => {
   const end = h + hours;
