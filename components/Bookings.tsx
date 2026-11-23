@@ -51,16 +51,17 @@ export default function Bookings({
 
   return (
     <section>
+      <div className="bk-tabs" role="group" aria-label="Filter by type">
+        {([["all", "All"], ...CATEGORIES] as [CategoryFilter, string][]).map(([k, label]) => (
+          <button key={k} className={k === "all" ? "" : `c-${k}`} aria-pressed={category === k} onClick={() => onCategory(k)}>
+            {k !== "all" && <i aria-hidden="true" />}
+            {label}
+            {loaded && <span className="n">{count(k)}</span>}
+          </button>
+        ))}
+      </div>
       <div className="bk-head">
-        <div className="filters" role="group" aria-label="Filter by type">
-          {([["all", "All types"], ...CATEGORIES] as [CategoryFilter, string][]).map(([k, label]) => (
-            <button key={k} aria-pressed={category === k} onClick={() => onCategory(k)}>
-              {label}
-              {loaded && <span className="n"> {count(k)}</span>}
-            </button>
-          ))}
-        </div>
-        <div className="filters" role="group" aria-label="Filter by status">
+        <div className="tabs seg" role="group" aria-label="Filter by status">
           {([["all", "Any status"], ["booked", "Booked"], ["todo", "To book"]] as [StatusFilter, string][]).map(([k, label]) => (
             <button key={k} aria-pressed={status === k} onClick={() => onStatus(k)}>
               {label}

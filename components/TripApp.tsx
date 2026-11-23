@@ -788,6 +788,24 @@ function PlanView({
               people={people}
               me={me}
             />
+            {social.on && (
+              <Balances
+                expenses={social.expenses}
+                members={social.members}
+                profiles={social.profiles}
+                me={me}
+                currency={plan?.currency ?? "USD"}
+                canEdit={canEdit}
+                onAdd={() => setView({ kind: "expense-form", expense: { kind: "expense" } })}
+                onOpen={(id) => setView({ kind: "expense", id })}
+                onSettle={(t) =>
+                  setView({
+                    kind: "expense-form",
+                    expense: { kind: "settlement", paid_by: t.from, amount: t.amount, currency: t.currency, shares: [{ email: t.to, amount: t.amount }] },
+                  })
+                }
+              />
+            )}
             <TripRail
               trips={allTrips}
               bookings={bookings}
@@ -801,24 +819,6 @@ function PlanView({
       ) : (
         <>
           {showBudget && plan && <BudgetPanel plan={plan} bookings={bookings} loaded={loaded} onPickCategory={pickCategory} />}
-          {social.on && (
-            <Balances
-              expenses={social.expenses}
-              members={social.members}
-              profiles={social.profiles}
-              me={me}
-              currency={plan?.currency ?? "USD"}
-              canEdit={canEdit}
-              onAdd={() => setView({ kind: "expense-form", expense: { kind: "expense" } })}
-              onOpen={(id) => setView({ kind: "expense", id })}
-              onSettle={(t) =>
-                setView({
-                  kind: "expense-form",
-                  expense: { kind: "settlement", paid_by: t.from, amount: t.amount, currency: t.currency, shares: [{ email: t.to, amount: t.amount }] },
-                })
-              }
-            />
-          )}
           <Bookings
             bookings={bookings}
             trips={trips}

@@ -531,3 +531,13 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
 .my-trips .tick { flex: none; width: 14px; color: var(--link); font-weight: 700; }
 .my-trips .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .my-trips .sub { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+/* Bookings filter: type as underlined tabs (each in its category colour), status as a small switch beneath. */
+.bk-tabs { display: flex; gap: 22px; overflow-x: auto; border-bottom: 1px solid var(--line); margin-bottom: 12px; scrollbar-width: none; }
+.bk-tabs::-webkit-scrollbar { display: none; }
+.bk-tabs button { flex: none; display: inline-flex; align-items: center; gap: 6px; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; background: transparent; padding: 8px 0 9px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.bk-tabs button:hover { color: var(--ink); }
+.bk-tabs button i { width: 8px; height: 8px; border-radius: 1px; background: var(--kc); }
+.bk-tabs button .n { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; opacity: .6; }
+.bk-tabs button[aria-pressed="true"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--kc, var(--ink)); }
+.side .split { margin-bottom: 0; }
