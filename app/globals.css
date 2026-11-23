@@ -547,3 +547,7 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
 .cell, .wdow, .wplace, .wcell { cursor: cell; }
 .cell:hover:not(.out), .wcell:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .cell.sel, .wdow.sel, .wplace.sel, .wcell.sel { background: color-mix(in srgb, var(--accent) 38%, var(--surface)); }
+
+/* Home: the lists that used to sit beside the calendar, now columns of their own. */
+.home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; align-items: start; }
+.home-grid > .side { display: contents; }

@@ -216,7 +216,7 @@ function PlanView({
   const [online, setOnline] = useState(true);
 
   const today = localToday();
-  const [tab, setTab] = useState<"home" | "map" | "book">("home");
+  const [tab, setTab] = useState<"home" | "cal" | "map" | "book">("cal");
   const [calView, setCalView] = useState<CalView>("month");
   const [anchor, setAnchor] = useState<string | null>(null);
   const [category, setCategory] = useState<CategoryFilter>("all");
@@ -726,6 +726,9 @@ function PlanView({
           <button role="tab" aria-selected={tab === "home"} onClick={() => setTab("home")}>
             Home
           </button>
+          <button role="tab" aria-selected={tab === "cal"} onClick={() => setTab("cal")}>
+            Calendar
+          </button>
           <button role="tab" aria-selected={tab === "map"} onClick={() => setTab("map")}>
             Map
           </button>
@@ -776,23 +779,24 @@ function PlanView({
           onBooking={(id) => setView({ kind: "booking", id })}
           onAddTrip={(place) => setView({ kind: "trip-form", trip: { place } })}
         />
+      ) : tab === "cal" ? (
+        <CalendarPanel
+          view={calView}
+          anchor={day}
+          range={range}
+          currency={plan?.currency ?? "USD"}
+          trips={allTrips}
+          bookings={bookings}
+          loaded={loaded}
+          today={today}
+          onView={setCalView}
+          onAnchor={setAnchor}
+          onTrip={(id) => setView({ kind: "trip", id })}
+          onBooking={(id) => setView({ kind: "booking", id })}
+          onPickDays={canEdit ? (start, end) => setView({ kind: "day-pick", start, end }) : undefined}
+        />
       ) : tab === "home" ? (
-        <section className="cal-layout">
-          <CalendarPanel
-            view={calView}
-            anchor={day}
-            range={range}
-            currency={plan?.currency ?? "USD"}
-            trips={allTrips}
-            bookings={bookings}
-            loaded={loaded}
-            today={today}
-            onView={setCalView}
-            onAnchor={setAnchor}
-            onTrip={(id) => setView({ kind: "trip", id })}
-            onBooking={(id) => setView({ kind: "booking", id })}
-            onPickDays={canEdit ? (start, end) => setView({ kind: "day-pick", start, end }) : undefined}
-          />
+        <section className="home-grid">
           <div className="side">
             <Tasks
               tasks={tasks}
