@@ -97,7 +97,7 @@ export default function Bookings({
               return (
                 <div
                   key={b.id}
-                  className="ticket"
+                  className={`ticket c-${categoryOf(b.type)}`}
                   role="button"
                   tabIndex={0}
                   onClick={() => onOpen(b.id)}
