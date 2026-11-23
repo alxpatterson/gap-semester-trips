@@ -255,3 +255,73 @@ export function BookingForm({
     </form>
   );
 }
+
+export type PlanInput = { plan_name: string; starts: string | null; ends: string | null; budget: number; curr: string; schengen: boolean };
+
+/**
+ * A whole new trip — the Winter 2027s of the app, not the weekends inside one. Everything but
+ * the name is optional, because the point of a new trip is usually to start putting things in
+ * it, and `planRange()` copes with a trip that has no dates yet.
+ */
+export function PlanForm({ saving, onSave, onCancel }: { saving: boolean; onSave: (d: PlanInput) => void; onCancel: () => void }) {
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const s = (k: string) => String(f.get(k) ?? "").trim();
+    onSave({
+      plan_name: s("plan_name"),
+      starts: s("starts") || null,
+      ends: s("ends") || null,
+      budget: Number(s("budget")) || 0,
+      curr: s("curr") || "USD",
+      schengen: f.get("schengen") === "on",
+    });
+  };
+  return (
+    <form className="f" onSubmit={submit}>
+      <label>
+        What are you calling it?
+        <input id="pf-name" name="plan_name" required maxLength={60} placeholder="Summer in Japan" autoFocus />
+      </label>
+      <div className="two">
+        <label>
+          Starts
+          <input id="pf-start" name="starts" type="date" />
+        </label>
+        <label>
+          Ends
+          <input id="pf-end" name="ends" type="date" />
+        </label>
+      </div>
+      <div className="two">
+        <label>
+          Budget
+          <input id="pf-budget" name="budget" type="number" min={0} step={100} placeholder="5000" />
+        </label>
+        <label>
+          Currency
+          <select id="pf-currency" name="curr" defaultValue="USD">
+            {["USD", "EUR", "GBP", "AUD", "CAD", "JPY", "CHF", "SEK", "NZD", "SGD", "THB"].map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label className="check">
+        <input id="pf-schengen" name="schengen" type="checkbox" defaultChecked />
+        Somewhere in Europe — count Schengen days
+      </label>
+      <p className="fine">You can change any of this later under Trip settings.</p>
+      <div className="row-actions">
+        <button className="btn primary" type="submit" disabled={saving}>
+          {saving ? "Creating…" : "Create trip"}
+        </button>
+        <button className="btn" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}

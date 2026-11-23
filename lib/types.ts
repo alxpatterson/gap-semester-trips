@@ -88,6 +88,7 @@ export interface Profile {
   email: string;
   display_name: string;
   pay_handle: string; // a Venmo/PayPal/Revolut handle or link
+  countries_goal?: number | null; // how many countries they're aiming for (0013)
 }
 
 export interface BookingPerson {

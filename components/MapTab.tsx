@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType, type FormEvent } from "react";
 import { fmtDate, fmtRange, money, tripEnd } from "@/lib/logic";
-import { countryName, MARK_LABELS, MARKS, VISIT_LABELS, visitLabel, type CountryVisit, type VisitStatus } from "@/lib/places";
+import { countryName, goalProgress, MARK_LABELS, MARKS, VISIT_LABELS, visitLabel, type CountryVisit, type VisitStatus } from "@/lib/places";
 import type { Booking, MarkKind, Trip } from "@/lib/types";
 import type { WorldMapProps } from "./WorldMap";
 import { BookingPill, TypeTile } from "./ui";
@@ -20,9 +20,6 @@ import { BookingPill, TypeTile } from "./ui";
  * download them.
  */
 
-/** Sovereign states, near enough, for "% of the world" to mean what people expect. */
-const COUNTRIES_IN_THE_WORLD = 195;
-
 const STATUS_HINT: Record<VisitStatus, string> = {
   now: "where you are today",
   been: "trips that have happened",
@@ -39,10 +36,16 @@ export default function MapTab({
   currency,
   canEdit,
   canMark,
+  scope,
+  planName,
+  tripCount,
+  goal,
   sharedIn,
   selected,
   onCountry,
+  onScope,
   onMark,
+  onGoal,
   onTrip,
   onBooking,
   onAddTrip,
@@ -57,10 +60,18 @@ export default function MapTab({
   canEdit: boolean;
   /** False until the 0012 table exists, which hides every button that would write to it. */
   canMark: boolean;
+  /** Which trips are being counted, and the name of this one for the toggle. */
+  scope: "plan" | "all";
+  planName: string;
+  tripCount: number;
+  /** How many countries they're aiming for, null until they say. */
+  goal: number | null;
   sharedIn: Record<string, string>;
   selected: string | null;
   onCountry: (code: string | null) => void;
+  onScope: (scope: "plan" | "all") => void;
   onMark: (code: string, mark: MarkKind | null) => void;
+  onGoal: (goal: number | null) => void;
   onTrip: (id: string) => void;
   onBooking: (id: string) => void;
   onAddTrip: (place: string) => void;
@@ -68,7 +79,7 @@ export default function MapTab({
   const been = visits.filter((v) => v.status === "been" || v.status === "now");
   const ahead = visits.filter((v) => v.status === "booked");
   const days = visits.reduce((sum, v) => sum + (v.status === "been" || v.status === "now" ? v.days : 0), 0);
-  const share = Math.round((been.length / COUNTRIES_IN_THE_WORLD) * 100);
+  const progress = goalProgress(been.length, goal);
 
   // Picking from the list flies the map to that country; the count is what re-triggers it, so
   // picking the same one twice brings the map back rather than doing nothing.
@@ -85,27 +96,38 @@ export default function MapTab({
   return (
     <section className="map-layout">
       <div className="panel map-panel">
-        <div className="map-stats">
-          <div className="stat">
-            <b>{loaded ? been.length : "–"}</b>
-            <span>countries visited</span>
+        <div className="map-top">
+          <div className="map-stats">
+            <div className="stat">
+              <b>{loaded ? been.length : "–"}</b>
+              <span>countries visited</span>
+            </div>
+            <div className="stat">
+              <b>{loaded && progress ? `${progress.pct}%` : "–"}</b>
+              <span>{progress ? `of your ${progress.goal}` : "no goal set"}</span>
+            </div>
+            <div className="stat">
+              <b>{loaded ? days : "–"}</b>
+              <span>days away</span>
+            </div>
+            <div className="stat">
+              <b>{loaded ? ahead.length : "–"}</b>
+              <span>still to come</span>
+            </div>
           </div>
-          <div className="stat">
-            <b>{loaded ? `${share}%` : "–"}</b>
-            <span>of the world</span>
-          </div>
-          <div className="stat">
-            <b>{loaded ? days : "–"}</b>
-            <span>days away</span>
-          </div>
-          <div className="stat">
-            <b>{loaded ? ahead.length : "–"}</b>
-            <span>still to come</span>
-          </div>
+          {/* Just this trip, or everywhere you've been — only worth asking once there's a choice. */}
+          {tripCount > 1 && (
+            <div className="tabs seg scope" role="tablist">
+              <button role="tab" aria-selected={scope === "plan"} onClick={() => onScope("plan")} title={`Only ${planName}`}>
+                This trip
+              </button>
+              <button role="tab" aria-selected={scope === "all"} onClick={() => onScope("all")} title="Every trip you're on">
+                All trips
+              </button>
+            </div>
+          )}
         </div>
-        <div className="world-bar" role="img" aria-label={`${been.length} of ${COUNTRIES_IN_THE_WORLD} countries visited`}>
-          <span style={{ width: `${Math.min(100, (been.length / COUNTRIES_IN_THE_WORLD) * 100)}%` }} />
-        </div>
+        <GoalBar been={been.length} goal={goal} canEdit={canEdit} onGoal={onGoal} />
 
         <MapCanvas
           visits={visits}
@@ -404,6 +426,85 @@ function MarkPicker({
       {onAddTrip && (
         <button className="btn small" onClick={() => onAddTrip(name)}>
           + Trip
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The bar across the top, measured against a goal they set rather than all 195 countries in the
+ * world — nobody is aiming at 195, so a share of it told them nothing. Until a goal is set there
+ * is no bar, only the offer of one: inventing a denominator would be worse than asking.
+ */
+function GoalBar({ been, goal, canEdit, onGoal }: { been: number; goal: number | null; canEdit: boolean; onGoal: (g: number | null) => void }) {
+  const [editing, setEditing] = useState(false);
+  const progress = goalProgress(been, goal);
+
+  const save = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const n = Number(new FormData(e.currentTarget).get("goal"));
+    setEditing(false);
+    onGoal(Number.isFinite(n) && n >= 1 ? Math.min(250, Math.round(n)) : null);
+  };
+
+  if (editing)
+    return (
+      <form className="goal-edit" onSubmit={save}>
+        <label htmlFor="goal-n">How many countries are you aiming for?</label>
+        <input id="goal-n" name="goal" type="number" min={1} max={250} defaultValue={goal ?? 30} autoFocus />
+        <button className="btn primary small" type="submit">
+          Save
+        </button>
+        <button className="btn small" type="button" onClick={() => setEditing(false)}>
+          Cancel
+        </button>
+        {goal !== null && (
+          <button
+            className="btn ghost small"
+            type="button"
+            onClick={() => {
+              setEditing(false);
+              onGoal(null);
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </form>
+    );
+
+  if (!progress)
+    return (
+      <div className="goal-row">
+        <span className="fine">No goal yet — the bar fills up against a number you pick.</span>
+        {canEdit && (
+          <button className="btn small" onClick={() => setEditing(true)}>
+            Set a goal
+          </button>
+        )}
+      </div>
+    );
+
+  return (
+    <div className="goal-row">
+      <div className="world-bar" role="img" aria-label={`${been} of ${progress.goal} countries`}>
+        <span style={{ width: `${progress.pct}%` }} />
+      </div>
+      <span className="goal-note">
+        {progress.met ? (
+          <>
+            <b>{been}</b> of {progress.goal} — goal met
+          </>
+        ) : (
+          <>
+            <b>{progress.left}</b> to go
+          </>
+        )}
+      </span>
+      {canEdit && (
+        <button className="btn ghost small" onClick={() => setEditing(true)}>
+          Edit goal
         </button>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countriesIn, countriesOfTrip, countryVisits, knownPlaces, normalize, tripStatus, visitLabel } from "./places";
+import { countriesIn, countriesOfTrip, countryVisits, goalProgress, knownPlaces, normalize, tripStatus, visitLabel } from "./places";
 import { COUNTRIES, MAP_HEIGHT, MAP_WIDTH, projectLonLat } from "./countries";
 import type { CountryMark, MarkKind, Trip } from "./types";
 
@@ -207,6 +207,26 @@ describe("countries marked by hand", () => {
   it("leaves every country unmarked when there are no marks", () => {
     const { visits } = countryVisits([trip({ place: "Japan", start_date: "2027-01-01", end_date: "2027-01-02" })], today);
     expect(visits[0].mark).toBeNull();
+  });
+});
+
+describe("a countries goal", () => {
+  it("has nothing to show until a goal is set", () => {
+    expect(goalProgress(4, null)).toBeNull();
+    expect(goalProgress(4, undefined)).toBeNull();
+    expect(goalProgress(4, 0)).toBeNull();
+  });
+  it("measures against the goal, not the whole world", () => {
+    expect(goalProgress(6, 30)).toMatchObject({ goal: 30, been: 6, left: 24, pct: 20, met: false });
+  });
+  it("rounds the share to something a bar can be read as", () => {
+    expect(goalProgress(1, 3)!.pct).toBe(33);
+  });
+  it("stops at full once the goal is met, but still counts honestly", () => {
+    expect(goalProgress(35, 30)).toMatchObject({ been: 35, left: 0, pct: 100, met: true });
+  });
+  it("is empty, not broken, before you have been anywhere", () => {
+    expect(goalProgress(0, 20)).toMatchObject({ left: 20, pct: 0, met: false });
   });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { canEditPlan, fmtRange, initialAnchor, localToday, maxSchengenWindow, money, MONTHS, planRange, type CalView } from "@/lib/logic";
@@ -13,7 +13,7 @@ import Bookings, { type CategoryFilter, type StatusFilter } from "./Bookings";
 import Tasks from "./Tasks";
 import { CalendarPanel, TripRail } from "./Calendar";
 import { BookingDetail, TripDetail } from "./Details";
-import { BookingForm, TripForm, type BookingInput, type TripInput } from "./Forms";
+import { BookingForm, PlanForm, TripForm, type BookingInput, type PlanInput, type TripInput } from "./Forms";
 import InstallHint from "./InstallHint";
 import MapTab from "./MapTab";
 import { Onboarding, RecoveryScreen, SetPassword, SetupNeeded, SignIn } from "./SignIn";
@@ -27,6 +27,7 @@ type View =
   | { kind: "booking-form"; booking?: Partial<Booking> }
   | { kind: "people" }
   | { kind: "country"; code: string }
+  | { kind: "new-plan" }
   | { kind: "expense"; id: string }
   | { kind: "expense-form"; expense?: Partial<Expense> }
   | null;
@@ -47,7 +48,24 @@ const NO_SOCIAL: Social = { on: false, members: [], profiles: [], expenses: [], 
 type Marks = { on: boolean; rows: CountryMark[] };
 const NO_MARKS: Marks = { on: false, rows: [] };
 
-type Cache = { plan: Plan; trips: Trip[]; bookings: Booking[]; tasks: Task[]; sync: SyncStatus | null; social?: Social; marks?: Marks; savedAt: string };
+/** Which trips the map counts: just this one, or every trip this person is on. */
+export type MapScope = "plan" | "all";
+
+/** Trips and marks from every trip you're on, which is what the map's All view counts. */
+type Everywhere = { trips: Trip[]; marks: CountryMark[] };
+const NOWHERE: Everywhere = { trips: [], marks: [] };
+
+type Cache = {
+  plan: Plan;
+  trips: Trip[];
+  bookings: Booking[];
+  tasks: Task[];
+  sync: SyncStatus | null;
+  social?: Social;
+  marks?: Marks;
+  everywhere?: Everywhere;
+  savedAt: string;
+};
 type Membership = { plan_id: string; role: MemberRole; name: string; kind: PlanKind };
 
 const cacheKey = (planId: string) => `gst:cache:${planId}`;
@@ -191,6 +209,7 @@ function PlanView({
   const [sync, setSync] = useState<SyncStatus | null>(cached?.sync ?? null);
   const [social, setSocial] = useState<Social>(cached?.social ?? NO_SOCIAL);
   const [marks, setMarks] = useState<Marks>(cached?.marks ?? NO_MARKS);
+  const [everywhere, setEverywhere] = useState<Everywhere>(cached?.everywhere ?? NOWHERE);
   const [loaded, setLoaded] = useState(!!cached);
   const [stale, setStale] = useState<string | null>(null); // savedAt of the offline copy being shown
   const [online, setOnline] = useState(true);
@@ -211,9 +230,11 @@ function PlanView({
     [memberships, planId],
   );
   const groupKey = groupIds.join(",");
+  // Every trip this person is on, their own and other people's — the map can count across them all.
+  const everyKey = useMemo(() => memberships.map((m) => m.plan_id).sort().join(","), [memberships]);
 
   const load = useCallback(async () => {
-    const [p, t, b, k, s, social, cm] = await Promise.all([
+    const [p, t, b, k, s, social, cm, every] = await Promise.all([
       // Every column, rather than a list: the calendar token arrived in 0008, and naming a column
       // the database doesn't have yet would fail the whole load on a deploy that got there first.
       sb.from("plans").select("*").eq("id", planId).single(),
@@ -224,6 +245,7 @@ function PlanView({
       loadSocial(sb, planId, groupKey ? groupKey.split(",") : []),
       // Tolerated missing, like the social tables: no table, no marking buttons, same map as before.
       sb.from("country_marks").select("*").eq("plan_id", planId),
+      loadEverywhere(sb, everyKey ? everyKey.split(",") : [planId]),
     ]);
     if (p.error || t.error || b.error) {
       setStale(readCache(planId)?.savedAt ?? null);
@@ -238,6 +260,7 @@ function PlanView({
       sync: (s.data as SyncStatus | null) ?? null,
       social,
       marks: { on: !cm.error, rows: (cm.data ?? []) as CountryMark[] },
+      everywhere: every,
       savedAt: new Date().toISOString(),
     };
     setPlan(next.plan);
@@ -247,10 +270,11 @@ function PlanView({
     setSync(next.sync);
     setSocial(social);
     setMarks(next.marks!);
+    setEverywhere(every);
     setStale(null);
     setLoaded(true);
     writeCache(next);
-  }, [sb, planId, groupKey]);
+  }, [sb, planId, groupKey, everyKey]);
 
   // Initial load, live updates from Supabase (your edits, your girlfriend's, and the Gmail sync), and refresh on reconnect.
   useEffect(() => {
@@ -324,7 +348,14 @@ function PlanView({
   const schengen = maxSchengenWindow(allTrips);
   // What the Map tab draws. The open country is held in the View union like every other
   // selection, but its card is drawn on the map itself rather than in the sheet.
-  const map = useMemo(() => countryVisits(allTrips, today, marks.rows), [allTrips, today, marks.rows]);
+  // The map counts either this trip (plus anything shared into it) or every trip you're on.
+  const [mapScope, setMapScope] = useState<MapScope>("plan");
+  const map = useMemo(() => {
+    const trips = mapScope === "all" ? everywhere.trips : allTrips;
+    const seen = mapScope === "all" ? everywhere.marks : marks.rows;
+    return countryVisits(trips, today, seen);
+  }, [mapScope, everywhere, allTrips, marks.rows, today]);
+  const goal = social.profiles.find((x) => x.email === me)?.countries_goal ?? null;
   const withFriends = social.on && social.members.length > 1;
   const people = withFriends ? social.members.map((m) => ({ email: m.email.toLowerCase(), label: m.email.toLowerCase() === me ? "Me" : nameOf(m.email, social.profiles) })) : [];
   // A group plan is created with no budget; showing "$0 left" there would only confuse.
@@ -383,6 +414,21 @@ function PlanView({
           : sb.from("country_marks").delete().eq("plan_id", planId).eq("code", code),
       mark ? "Marked on the map" : "Taken off the map",
     );
+
+  /** A whole new trip of your own. No invite code: that is only the gate on a new account. */
+  const createPlan = async (data: PlanInput) => {
+    setSaving(true);
+    const { data: id, error } = await sb.rpc("create_plan", data);
+    setSaving(false);
+    if (error) return toast(`Couldn't create it: ${error.message}`);
+    toast(`${data.plan_name} is ready`);
+    setView(null);
+    onPlansChanged(id as string);
+  };
+
+  /** How many countries you're aiming for. Kept on you, not the trip, so it spans all of them. */
+  const saveGoal = (n: number | null) =>
+    run(() => sb.from("profiles").upsert({ email: me, countries_goal: n }, { onConflict: "email" }), n ? `Aiming for ${n}` : "Goal cleared");
 
   const remove = async (table: "trips" | "bookings", id: string) => {
     if (await run(() => sb.from(table).delete().eq("plan_id", planId).eq("id", id), "Deleted")) setView(null);
@@ -455,7 +501,13 @@ function PlanView({
 
   // ---------- Sheet contents ----------
   let sheet: React.ReactNode = null;
-  if (view?.kind === "trip") {
+  if (view?.kind === "new-plan") {
+    sheet = (
+      <Sheet title="New trip" onClose={() => setView(null)}>
+        <PlanForm saving={saving} onSave={createPlan} onCancel={() => setView(null)} />
+      </Sheet>
+    );
+  } else if (view?.kind === "trip") {
     const trip = trips.find((t) => t.id === view.id);
     const elsewhere = trip ? undefined : social.sharedTrips.find((t) => t.id === view.id);
     if (trip)
@@ -622,17 +674,14 @@ function PlanView({
     <div className="wrap">
       <header className="top">
         <div className="brand">
-          {memberships.length > 1 ? (
-            <select className="plan-pick" aria-label="Which trip" value={planId} onChange={(e) => onPickPlan(e.target.value)}>
-              {memberships.map((m) => (
-                <option key={m.plan_id} value={m.plan_id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <h1>{plan?.name || "Trip planner"}</h1>
-          )}
+          <TripPicker
+            name={plan?.name || "Trip planner"}
+            planId={planId}
+            memberships={memberships}
+            onPick={onPickPlan}
+            onNew={() => setView({ kind: "new-plan" })}
+            onSettings={() => setView({ kind: "people" })}
+          />
         </div>
         <div className="chips">
           {showBudget && plan && <BudgetChip plan={plan} bookings={bookings} loaded={loaded} onOpen={() => setTab("book")} />}
@@ -685,9 +734,15 @@ function PlanView({
           canEdit={canEdit}
           sharedIn={sharedIn}
           canMark={marks.on}
+          scope={mapScope}
+          planName={plan?.name ?? "this trip"}
+          tripCount={memberships.length}
+          goal={goal}
           selected={view?.kind === "country" ? view.code : null}
           onCountry={(code) => setView(code ? { kind: "country", code } : null)}
+          onScope={setMapScope}
           onMark={setMark}
+          onGoal={saveGoal}
           onTrip={(id) => setView({ kind: "trip", id })}
           onBooking={(id) => setView({ kind: "booking", id })}
           onAddTrip={(place) => setView({ kind: "trip-form", trip: { place } })}
@@ -775,6 +830,83 @@ function PlanView({
   );
 }
 
+
+/**
+ * Which trip you're looking at, and the way to start another. The name in the top left is the
+ * button: tapping it lists every trip you're on, your own first, with a tick beside this one.
+ *
+ * Hand-rolled rather than a <select> because the menu holds actions as well as trips, and an
+ * option that isn't a trip reads badly in a native picker.
+ */
+function TripPicker({
+  name,
+  planId,
+  memberships,
+  onPick,
+  onNew,
+  onSettings,
+}: {
+  name: string;
+  planId: string;
+  memberships: Membership[];
+  onPick: (id: string) => void;
+  onNew: () => void;
+  onSettings: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent | TouchEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open]);
+
+  const choose = (id: string) => {
+    setOpen(false);
+    if (id !== planId) onPick(id);
+  };
+
+  return (
+    <div className="picker" ref={box}>
+      <button className="plan-pick" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="nm">{name}</span>
+        <span className="caret" aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="picker-menu" role="menu">
+          {memberships.length > 0 && <div className="picker-head">Your trips</div>}
+          {memberships.map((m) => (
+            <button key={m.plan_id} role="menuitem" className={m.plan_id === planId ? "on" : ""} onClick={() => choose(m.plan_id)}>
+              <span className="tick" aria-hidden="true">
+                {m.plan_id === planId ? "✓" : ""}
+              </span>
+              <span className="nm">{m.name}</span>
+              {m.kind === "group" ? <span className="sub">Shared</span> : m.role !== "owner" ? <span className="sub">Guest</span> : null}
+            </button>
+          ))}
+          <div className="picker-rule" />
+          <button role="menuitem" onClick={() => { setOpen(false); onNew(); }}>
+            <span className="tick" aria-hidden="true">+</span>
+            <span className="nm">New trip</span>
+          </button>
+          <button role="menuitem" onClick={() => { setOpen(false); onSettings(); }}>
+            <span className="tick" aria-hidden="true" />
+            <span className="nm">Trip settings</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** The things that used to be hardcoded: what the trip is called, when it runs, the budget. */
 function PlanSettings({
@@ -1006,6 +1138,20 @@ function People({
       )}
     </>
   );
+}
+
+/**
+ * Every trip this person is on, across all of their plans, for the map's All view. Row-level
+ * security already limits this to plans they belong to, so the id list is a narrowing and not a
+ * guard. Marks are tolerated missing exactly as they are for the open plan.
+ */
+async function loadEverywhere(sb: SupabaseClient, planIds: string[]): Promise<Everywhere> {
+  if (!planIds.length) return NOWHERE;
+  const [trips, marks] = await Promise.all([
+    sb.from("trips").select("*").in("plan_id", planIds),
+    sb.from("country_marks").select("*").in("plan_id", planIds),
+  ]);
+  return { trips: (trips.data ?? []) as Trip[], marks: (marks.data ?? []) as CountryMark[] };
 }
 
 /**

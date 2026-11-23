@@ -344,6 +344,23 @@ export const countryName = (code: string) => NAMES.get(code) ?? code;
 export const visitLabel = (v: Pick<CountryVisit, "status" | "mark" | "trips">) =>
   v.trips.length === 0 && v.mark ? MARK_LABELS[v.mark] : VISIT_LABELS[v.status];
 
+/**
+ * How far along a countries goal someone is. The map's bar used to be a share of all 195
+ * countries in the world, which is a denominator nobody is actually aiming at; this is theirs.
+ * Null when no goal is set, which is the map's cue to offer one rather than invent a number.
+ */
+export function goalProgress(been: number, goal: number | null | undefined) {
+  if (!goal || goal < 1) return null;
+  return {
+    goal,
+    been,
+    left: Math.max(0, goal - been),
+    // Past the goal the bar stays full rather than overflowing, but `been` still reads honestly.
+    pct: Math.min(100, Math.round((been / goal) * 100)),
+    met: been >= goal,
+  };
+}
+
 export type CountryVisit = {
   code: string;
   name: string;
