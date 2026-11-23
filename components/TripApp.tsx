@@ -5,7 +5,7 @@ import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { canEditPlan, fmtRange, initialAnchor, localToday, maxSchengenWindow, money, MONTHS, planRange, type CalView } from "@/lib/logic";
 import { countryVisits } from "@/lib/places";
-import type { Booking, BookingPerson, Category, Expense, Member, MemberRole, Plan, PlanKind, Profile, SyncStatus, Task, Trip, TripNote } from "@/lib/types";
+import type { Booking, BookingPerson, Category, CountryMark, Expense, MarkKind, Member, MemberRole, Plan, PlanKind, Profile, SyncStatus, Task, Trip, TripNote } from "@/lib/types";
 import { nameOf } from "@/lib/split";
 import BudgetPanel, { BudgetChip } from "./BudgetPanel";
 import CalendarFeed from "./CalendarFeed";
@@ -43,7 +43,11 @@ type Social = {
 };
 const NO_SOCIAL: Social = { on: false, members: [], profiles: [], expenses: [], people: [], notes: [], sharedTrips: [] };
 
-type Cache = { plan: Plan; trips: Trip[]; bookings: Booking[]; tasks: Task[]; sync: SyncStatus | null; social?: Social; savedAt: string };
+/** Countries marked by hand (0012). Like the social tables, off until the migration has run. */
+type Marks = { on: boolean; rows: CountryMark[] };
+const NO_MARKS: Marks = { on: false, rows: [] };
+
+type Cache = { plan: Plan; trips: Trip[]; bookings: Booking[]; tasks: Task[]; sync: SyncStatus | null; social?: Social; marks?: Marks; savedAt: string };
 type Membership = { plan_id: string; role: MemberRole; name: string; kind: PlanKind };
 
 const cacheKey = (planId: string) => `gst:cache:${planId}`;
@@ -186,6 +190,7 @@ function PlanView({
   const [tasks, setTasks] = useState<Task[]>(cached?.tasks ?? []);
   const [sync, setSync] = useState<SyncStatus | null>(cached?.sync ?? null);
   const [social, setSocial] = useState<Social>(cached?.social ?? NO_SOCIAL);
+  const [marks, setMarks] = useState<Marks>(cached?.marks ?? NO_MARKS);
   const [loaded, setLoaded] = useState(!!cached);
   const [stale, setStale] = useState<string | null>(null); // savedAt of the offline copy being shown
   const [online, setOnline] = useState(true);
@@ -208,7 +213,7 @@ function PlanView({
   const groupKey = groupIds.join(",");
 
   const load = useCallback(async () => {
-    const [p, t, b, k, s, social] = await Promise.all([
+    const [p, t, b, k, s, social, cm] = await Promise.all([
       // Every column, rather than a list: the calendar token arrived in 0008, and naming a column
       // the database doesn't have yet would fail the whole load on a deploy that got there first.
       sb.from("plans").select("*").eq("id", planId).single(),
@@ -217,6 +222,8 @@ function PlanView({
       sb.from("tasks").select("*").eq("plan_id", planId),
       sb.from("sync_status").select("plan_id,last_run,added,updated,review,last_error").eq("plan_id", planId).maybeSingle(),
       loadSocial(sb, planId, groupKey ? groupKey.split(",") : []),
+      // Tolerated missing, like the social tables: no table, no marking buttons, same map as before.
+      sb.from("country_marks").select("*").eq("plan_id", planId),
     ]);
     if (p.error || t.error || b.error) {
       setStale(readCache(planId)?.savedAt ?? null);
@@ -230,6 +237,7 @@ function PlanView({
       tasks: (k.data ?? []) as Task[],
       sync: (s.data as SyncStatus | null) ?? null,
       social,
+      marks: { on: !cm.error, rows: (cm.data ?? []) as CountryMark[] },
       savedAt: new Date().toISOString(),
     };
     setPlan(next.plan);
@@ -238,6 +246,7 @@ function PlanView({
     setTasks(next.tasks);
     setSync(next.sync);
     setSocial(social);
+    setMarks(next.marks!);
     setStale(null);
     setLoaded(true);
     writeCache(next);
@@ -284,6 +293,19 @@ function PlanView({
     };
   }, [sb, planId, load, social.on]);
 
+  // Marks get their own channel, opened only once the table is known to exist, so that a
+  // database without it can't break live updates for everything else.
+  useEffect(() => {
+    if (!marks.on) return;
+    const channel = sb
+      .channel(`plan-${planId}-marks`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "country_marks", filter: `plan_id=eq.${planId}` }, () => load())
+      .subscribe();
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, [sb, planId, load, marks.on]);
+
   const range = useMemo(() => planRange(plan, today), [plan, today]);
   // The window isn't known until the plan loads, so settle the opening day once it is.
   const day = anchor ?? initialAnchor(today, range);
@@ -302,7 +324,7 @@ function PlanView({
   const schengen = maxSchengenWindow(allTrips);
   // What the Map tab draws. The open country is held in the View union like every other
   // selection, but its card is drawn on the map itself rather than in the sheet.
-  const map = useMemo(() => countryVisits(allTrips, today), [allTrips, today]);
+  const map = useMemo(() => countryVisits(allTrips, today, marks.rows), [allTrips, today, marks.rows]);
   const withFriends = social.on && social.members.length > 1;
   const people = withFriends ? social.members.map((m) => ({ email: m.email.toLowerCase(), label: m.email.toLowerCase() === me ? "Me" : nameOf(m.email, social.profiles) })) : [];
   // A group plan is created with no budget; showing "$0 left" there would only confuse.
@@ -351,6 +373,16 @@ function PlanView({
     );
 
   const deleteTask = (t: Task) => run(() => sb.from("tasks").delete().eq("plan_id", planId).eq("id", t.id), "Deleted");
+
+  /** Mark a country been, planned or wished for — or clear it. Nothing to do with trips. */
+  const setMark = (code: string, mark: MarkKind | null) =>
+    run(
+      () =>
+        mark
+          ? sb.from("country_marks").upsert({ plan_id: planId, code, mark }, { onConflict: "plan_id,code" })
+          : sb.from("country_marks").delete().eq("plan_id", planId).eq("code", code),
+      mark ? "Marked on the map" : "Taken off the map",
+    );
 
   const remove = async (table: "trips" | "bookings", id: string) => {
     if (await run(() => sb.from(table).delete().eq("plan_id", planId).eq("id", id), "Deleted")) setView(null);
@@ -652,8 +684,10 @@ function PlanView({
           currency={plan?.currency ?? "USD"}
           canEdit={canEdit}
           sharedIn={sharedIn}
+          canMark={marks.on}
           selected={view?.kind === "country" ? view.code : null}
           onCountry={(code) => setView(code ? { kind: "country", code } : null)}
+          onMark={setMark}
           onTrip={(id) => setView({ kind: "trip", id })}
           onBooking={(id) => setView({ kind: "booking", id })}
           onAddTrip={(place) => setView({ kind: "trip-form", trip: { place } })}

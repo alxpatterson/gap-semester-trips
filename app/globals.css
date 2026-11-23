@@ -289,6 +289,18 @@ a { color: var(--link); }
 .wm-pop .tile { width: 34px; height: 34px; border-radius: 9px; }
 .wm-pop .tile svg { width: 17px; height: 17px; }
 
+/* Been / Planned / Wish list: putting a country on the map without a trip for it. */
+.mark-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.mark-label { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.marks { display: inline-flex; gap: 2px; background: var(--soft); border-radius: var(--r-md); padding: 3px; }
+.marks .mark { border: 0; background: transparent; padding: 5px 10px; border-radius: var(--r-sm); font-size: 12.5px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.marks .mark:hover { color: var(--ink); }
+/* Pressed, each one wears the colour it gives the country, so the map and the button agree. */
+.marks .mark[aria-pressed="true"] { color: var(--tint-ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.marks .mark.v-been[aria-pressed="true"] { background: var(--k-base); }
+.marks .mark.v-planned[aria-pressed="true"] { background: var(--k-travel); }
+.marks .mark.v-wish[aria-pressed="true"] { background: var(--k-weekend); }
+
 /* The countries as a list under the map, in columns where the width allows. */
 .country-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 2px 14px; margin: 0; padding: 0; list-style: none; }
 .wm-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }

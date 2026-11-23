@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { countriesIn, countriesOfTrip, countryVisits, knownPlaces, normalize, tripStatus } from "./places";
+import { countriesIn, countriesOfTrip, countryVisits, knownPlaces, normalize, tripStatus, visitLabel } from "./places";
 import { COUNTRIES, MAP_HEIGHT, MAP_WIDTH, projectLonLat } from "./countries";
-import type { Trip } from "./types";
+import type { CountryMark, MarkKind, Trip } from "./types";
 
 const trip = (t: Partial<Trip>): Trip => ({
   plan_id: "p",
@@ -155,6 +155,58 @@ describe("the countries the map colours in", () => {
   it("ignores a trip with no dates rather than counting days for it", () => {
     const { visits } = countryVisits([trip({ place: "Peru" })], today);
     expect(visits[0]).toMatchObject({ code: "PER", days: 0, first: null, last: null, status: "idea" });
+  });
+});
+
+const mark = (code: string, m: MarkKind): CountryMark => ({ plan_id: "p", code, mark: m, created_by: "a@b.c" });
+
+describe("countries marked by hand", () => {
+  const today = "2027-02-10";
+
+  it("puts a marked country on the map with no trip at all", () => {
+    const { visits } = countryVisits([], today, [mark("JPN", "been")]);
+    expect(visits).toHaveLength(1);
+    expect(visits[0]).toMatchObject({ code: "JPN", name: "Japan", status: "been", mark: "been", days: 0, first: null, last: null });
+  });
+
+  it("gives each mark the colour its trips would have earned", () => {
+    const { visits } = countryVisits([], today, [mark("JPN", "been"), mark("PER", "planned"), mark("ISL", "wish")]);
+    expect(Object.fromEntries(visits.map((v) => [v.code, v.status]))).toEqual({ JPN: "been", PER: "booked", ISL: "idea" });
+  });
+
+  it("says what a mark is rather than borrowing a trip's word for it", () => {
+    const { visits } = countryVisits([], today, [mark("PER", "planned"), mark("ISL", "wish")]);
+    expect(visits.map(visitLabel).sort()).toEqual(["Planned", "Wish list"]);
+  });
+
+  it("lets a trip outrank a weaker mark on the same country", () => {
+    const here = trip({ place: "Italy", start_date: "2027-02-08", end_date: "2027-02-12", status: "booked" });
+    const { visits } = countryVisits([here], today, [mark("ITA", "wish")]);
+    expect(visits[0]).toMatchObject({ status: "now", mark: "wish" });
+    expect(visitLabel(visits[0])).toBe("Here now");
+  });
+
+  it("lets a been mark outrank a trip that hasn't happened yet", () => {
+    const later = trip({ place: "Japan", start_date: "2027-05-01", end_date: "2027-05-09", status: "planned" });
+    const { visits } = countryVisits([later], today, [mark("JPN", "been")]);
+    expect(visits[0].status).toBe("been");
+  });
+
+  it("counts no days for a mark, only for trips", () => {
+    const { visits } = countryVisits([trip({ place: "Japan", start_date: "2027-01-01", end_date: "2027-01-05", status: "booked" })], today, [
+      mark("JPN", "been"),
+    ]);
+    expect(visits[0].days).toBe(5);
+  });
+
+  it("ignores a mark for a country the map can't draw", () => {
+    const { visits } = countryVisits([], today, [mark("ZZZ", "been")]);
+    expect(visits).toEqual([]);
+  });
+
+  it("leaves every country unmarked when there are no marks", () => {
+    const { visits } = countryVisits([trip({ place: "Japan", start_date: "2027-01-01", end_date: "2027-01-02" })], today);
+    expect(visits[0].mark).toBeNull();
   });
 });
 

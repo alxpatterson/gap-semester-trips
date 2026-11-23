@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { fmtDate, fmtRange, money, tripEnd } from "@/lib/logic";
-import { countryName, VISIT_LABELS, type CountryVisit, type VisitStatus } from "@/lib/places";
-import type { Booking, Trip } from "@/lib/types";
+import { countryName, MARK_LABELS, MARKS, VISIT_LABELS, visitLabel, type CountryVisit, type VisitStatus } from "@/lib/places";
+import type { Booking, MarkKind, Trip } from "@/lib/types";
 import type { WorldMapProps } from "./WorldMap";
 import { BookingPill, TypeTile } from "./ui";
 
@@ -38,9 +38,11 @@ export default function MapTab({
   today,
   currency,
   canEdit,
+  canMark,
   sharedIn,
   selected,
   onCountry,
+  onMark,
   onTrip,
   onBooking,
   onAddTrip,
@@ -53,9 +55,12 @@ export default function MapTab({
   today: string;
   currency: string;
   canEdit: boolean;
+  /** False until the 0012 table exists, which hides every button that would write to it. */
+  canMark: boolean;
   sharedIn: Record<string, string>;
   selected: string | null;
   onCountry: (code: string | null) => void;
+  onMark: (code: string, mark: MarkKind | null) => void;
   onTrip: (id: string) => void;
   onBooking: (id: string) => void;
   onAddTrip: (place: string) => void;
@@ -115,9 +120,11 @@ export default function MapTab({
                 bookings={bookings}
                 currency={currency}
                 canEdit={canEdit}
+                canMark={canMark}
                 sharedIn={sharedIn}
                 today={today}
                 onClose={() => onCountry(null)}
+                onMark={onMark}
                 onTrip={onTrip}
                 onBooking={onBooking}
                 onAddTrip={onAddTrip}
@@ -153,7 +160,7 @@ export default function MapTab({
               <button className={`trip-item country-item v-${v.status} ${selected === v.code ? "on" : ""}`} onClick={() => openFromList(v.code)}>
                 <span className="sw" />
                 <span className="t">{v.name}</span>
-                <span className="pill">{VISIT_LABELS[v.status]}</span>
+                <span className="pill">{visitLabel(v)}</span>
                 <span className="d">
                   {v.trips.length} trip{v.trips.length > 1 ? "s" : ""}
                   {v.days > 0 && ` · ${v.days} day${v.days > 1 ? "s" : ""}`}
@@ -164,7 +171,8 @@ export default function MapTab({
           ))}
         </ul>
         <p className="fine map-note">
-          Countries come from what&apos;s in each trip&apos;s <strong>Where</strong> box.
+          Countries come from what&apos;s in each trip&apos;s <strong>Where</strong> box. Tap one on the map to mark it{" "}
+          <strong>Been</strong>, <strong>Planned</strong> or <strong>Wish list</strong> without a trip.
         </p>
       </aside>
 
@@ -228,9 +236,11 @@ export function CountryPopup({
   bookings,
   currency,
   canEdit,
+  canMark,
   sharedIn,
   today,
   onClose,
+  onMark,
   onTrip,
   onBooking,
   onAddTrip,
@@ -240,9 +250,11 @@ export function CountryPopup({
   bookings: Booking[];
   currency: string;
   canEdit: boolean;
+  canMark: boolean;
   sharedIn: Record<string, string>;
   today: string;
   onClose: () => void;
+  onMark: (code: string, mark: MarkKind | null) => void;
   onTrip: (id: string) => void;
   onBooking: (id: string) => void;
   onAddTrip: (place: string) => void;
@@ -264,22 +276,20 @@ export function CountryPopup({
     <div className="wm-pop" role="dialog" aria-label={name}>
       <div className="wm-pop-head">
         <h3>{name}</h3>
-        {visit && <span className={`pill country-pill v-${visit.status}`}>{VISIT_LABELS[visit.status]}</span>}
+        {visit && (
+          <span className={`pill country-pill v-${visit.status}`}>{visitLabel(visit)}</span>
+        )}
         <button className="x" aria-label="Close" onClick={onClose}>
           ×
         </button>
       </div>
 
-      {!visit ? (
+      {!visit || !visit.trips.length ? (
         <div className="wm-pop-body">
           <p className="empty" style={{ padding: "2px 0" }}>
-            No trips here yet.
+            {visit?.mark ? `On your map as ${MARK_LABELS[visit.mark].toLowerCase()}. No trips here yet.` : "No trips here yet."}
           </p>
-          {canEdit && (
-            <button className="btn primary small" onClick={() => onAddTrip(name)}>
-              + Trip to {name}
-            </button>
-          )}
+          <MarkPicker code={code} name={name} mark={visit?.mark ?? null} canEdit={canEdit} canMark={canMark} onMark={onMark} onAddTrip={onAddTrip} />
         </div>
       ) : (
         <div className="wm-pop-body">
@@ -318,6 +328,8 @@ export function CountryPopup({
               ))}
           </ul>
 
+          <MarkPicker code={code} name={name} mark={visit.mark} canEdit={canEdit} canMark={canMark} onMark={onMark} onAddTrip={null} />
+
           {here.length > 0 && <div className="section-t">Bookings</div>}
           {here.length === 0 && allShared && (
             <p className="fine">These are shared trips — their bookings live in the plan they&apos;re shared in.</p>
@@ -338,6 +350,61 @@ export function CountryPopup({
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Been, Planned or Wish list — the three ways to put a country on the map by hand, for anywhere
+ * a trip doesn't already cover. Tapping the one that's set clears it.
+ *
+ * Hidden entirely until the 0012 table can be read, so the map behaves as it did before the
+ * migration rather than offering a button whose write would fail.
+ */
+function MarkPicker({
+  code,
+  name,
+  mark,
+  canEdit,
+  canMark,
+  onMark,
+  onAddTrip,
+}: {
+  code: string;
+  name: string;
+  mark: MarkKind | null;
+  canEdit: boolean;
+  canMark: boolean;
+  onMark: (code: string, mark: MarkKind | null) => void;
+  /** Null on a country that already has trips, where another one isn't the obvious next thing. */
+  onAddTrip: ((place: string) => void) | null;
+}) {
+  if (!canEdit) return null;
+  return (
+    <div className="mark-row">
+      {canMark && (
+        <>
+          <span className="mark-label">Mark as</span>
+          <span className="marks">
+            {MARKS.map(([kind, label]) => (
+              <button
+                key={kind}
+                className={`mark v-${kind}`}
+                aria-pressed={mark === kind}
+                title={mark === kind ? `Take ${name} off the map` : `Mark ${name} as ${label.toLowerCase()}`}
+                onClick={() => onMark(code, mark === kind ? null : kind)}
+              >
+                {label}
+              </button>
+            ))}
+          </span>
+        </>
+      )}
+      {onAddTrip && (
+        <button className="btn small" onClick={() => onAddTrip(name)}>
+          + Trip
+        </button>
       )}
     </div>
   );

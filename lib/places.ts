@@ -1,5 +1,5 @@
 import { dayNum, tripEnd } from "./logic";
-import type { Trip } from "./types";
+import type { CountryMark, MarkKind, Trip } from "./types";
 import { COUNTRIES } from "./countries";
 
 /**
@@ -311,6 +311,18 @@ export const VISIT_LABELS: Record<VisitStatus, string> = {
   idea: "Idea",
 };
 
+/**
+ * A mark earns a country the same colour a trip would, so the map reads the same either way.
+ * It is only the words that differ: nothing is "Booked" when there's no booking behind it.
+ */
+const MARK_STATUS: Record<MarkKind, VisitStatus> = { been: "been", planned: "booked", wish: "idea" };
+export const MARK_LABELS: Record<MarkKind, string> = { been: "Been", planned: "Planned", wish: "Wish list" };
+export const MARKS: [MarkKind, string][] = [
+  ["been", "Been"],
+  ["planned", "Planned"],
+  ["wish", "Wish list"],
+];
+
 /** One trip's standing today: on now, finished, still to come, or never more than an idea. */
 export function tripStatus(trip: Pick<Trip, "start_date" | "end_date" | "status">, today: string): VisitStatus {
   if (!trip.start_date) return "idea";
@@ -325,10 +337,19 @@ const NAMES = new Map(COUNTRIES.map((c) => [c.code, c.name] as const));
 /** A country's name from its ISO code, for the countries with no trip on them to fall back on. */
 export const countryName = (code: string) => NAMES.get(code) ?? code;
 
+/**
+ * What a country's pill reads. A mark with no trip behind it says what it is — nothing is
+ * "Booked" on the strength of someone tapping Planned.
+ */
+export const visitLabel = (v: Pick<CountryVisit, "status" | "mark" | "trips">) =>
+  v.trips.length === 0 && v.mark ? MARK_LABELS[v.mark] : VISIT_LABELS[v.status];
+
 export type CountryVisit = {
   code: string;
   name: string;
   status: VisitStatus;
+  /** Set by hand (0012), whether or not there are also trips here. */
+  mark: MarkKind | null;
   trips: Trip[];
   /** Days spent in the country, counting a day shared by two trips once. */
   days: number;
@@ -337,12 +358,21 @@ export type CountryVisit = {
 };
 
 /**
- * The map's whole model: a country for every trip that could be placed, and the trips that
- * couldn't, which the tab lists so they can be given a Where.
+ * The map's whole model: a country for every trip that could be placed, every country marked by
+ * hand, and the trips that couldn't be placed, which the tab lists so they can be given a Where.
  */
-export function countryVisits(trips: Trip[], today: string): { visits: CountryVisit[]; unplaced: Trip[] } {
+export function countryVisits(trips: Trip[], today: string, marks: CountryMark[] = []): { visits: CountryVisit[]; unplaced: Trip[] } {
   const byCode = new Map<string, { visit: CountryVisit; days: Set<number> }>();
   const unplaced: Trip[] = [];
+
+  const blank = (code: string, status: VisitStatus) => {
+    const entry = byCode.get(code) ?? {
+      visit: { code, name: countryName(code), status, mark: null, trips: [], days: 0, first: null, last: null },
+      days: new Set<number>(),
+    };
+    byCode.set(code, entry);
+    return entry;
+  };
 
   for (const trip of trips) {
     const codes = countriesOfTrip(trip).filter((code) => NAMES.has(code));
@@ -352,10 +382,7 @@ export function countryVisits(trips: Trip[], today: string): { visits: CountryVi
     }
     const status = tripStatus(trip, today);
     for (const code of codes) {
-      const entry =
-        byCode.get(code) ??
-        { visit: { code, name: countryName(code), status, trips: [], days: 0, first: null, last: null }, days: new Set<number>() };
-      byCode.set(code, entry);
+      const entry = blank(code, status);
       entry.visit.trips.push(trip);
       if (STATUS_ORDER[status] < STATUS_ORDER[entry.visit.status]) entry.visit.status = status;
       if (trip.start_date) {
@@ -365,6 +392,16 @@ export function countryVisits(trips: Trip[], today: string): { visits: CountryVi
         if (!entry.visit.last || end > entry.visit.last) entry.visit.last = end;
       }
     }
+  }
+
+  // A mark brings a country onto the map on its own, and where there are trips too the stronger
+  // of the two wins — somewhere you've been and are going back to still reads as been.
+  for (const m of marks) {
+    if (!NAMES.has(m.code) || !MARK_STATUS[m.mark]) continue;
+    const status = MARK_STATUS[m.mark];
+    const entry = blank(m.code, status);
+    entry.visit.mark = m.mark;
+    if (STATUS_ORDER[status] < STATUS_ORDER[entry.visit.status]) entry.visit.status = status;
   }
 
   const visits = [...byCode.values()].map(({ visit, days }) => ({ ...visit, days: days.size }));

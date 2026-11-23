@@ -105,6 +105,16 @@ export interface TripNote {
   created_at: string;
 }
 
+/** A country marked by hand rather than earned by a trip (0012). */
+export type MarkKind = "been" | "planned" | "wish";
+
+export interface CountryMark {
+  plan_id: string;
+  code: string; // ISO 3166-1 alpha-3
+  mark: MarkKind;
+  created_by: string;
+}
+
 export type ExpenseKind = "expense" | "settlement";
 
 export interface Share {
