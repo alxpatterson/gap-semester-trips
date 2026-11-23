@@ -63,7 +63,7 @@ a { color: var(--link); }
 .brand { margin-right: auto; min-width: 0; }
 .brand h1 { font-family: var(--display); font-weight: 800; font-size: 28px; letter-spacing: -.025em; margin: 0; text-wrap: balance; }
 .picker { position: relative; min-width: 0; }
-.plan-pick { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 800; font-size: 28px; letter-spacing: -.025em; border: 0; background: transparent; color: var(--ink); padding: 2px 4px 2px 0; max-width: 100%; text-align: left; border-radius: var(--r-sm); }
+.plan-pick { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 800; font-size: 20px; letter-spacing: -.02em; border: 0; background: transparent; color: var(--ink); padding: 2px 4px 2px 0; max-width: 100%; text-align: left; border-radius: var(--r-sm); }
 .plan-pick .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plan-pick .caret { flex: none; width: 9px; height: 9px; border-right: 2.5px solid var(--muted); border-bottom: 2.5px solid var(--muted); transform: translateY(-3px) rotate(45deg); border-radius: 1px; }
 .plan-pick:hover .caret { border-color: var(--ink); }
