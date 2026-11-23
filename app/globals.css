@@ -542,3 +542,56 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
 /* Home: the lists that used to sit beside the calendar, now columns of their own. */
 .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; align-items: start; }
 .home-grid > .side { display: contents; }
+
+/* Hovering a day: a card zooms out of it with everything on that day. Never in the way of the pointer. */
+.peek { position: fixed; z-index: 30; pointer-events: none; background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow), 0 12px 32px rgba(0,0,0,.16); padding: 12px; display: flex; flex-direction: column; gap: 8px; animation: peek-in .16s cubic-bezier(.2,.8,.3,1); }
+@keyframes peek-in { from { transform: scale(.55); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .peek { animation: none; } }
+.peek-h { display: flex; flex-direction: column; }
+.peek-h span { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.peek-h b { font-family: var(--display); font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+.peek-trip { display: flex; flex-direction: column; border-left: 3px solid var(--kc); border-radius: 0 var(--r-sm) var(--r-sm) 0; padding: 5px 9px; background: color-mix(in srgb, var(--kc) var(--tint), transparent); }
+.peek-trip.idea { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--kc) var(--tint), transparent) 0 7px, transparent 7px 12px); }
+.peek-trip .t { font-weight: 600; font-size: 13px; }
+.peek-trip .d { font-size: 11.5px; color: var(--muted); }
+.peek-bk { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.peek-bk .tile { width: 30px; height: 30px; border-radius: 8px; }
+.peek-bk .tile svg { width: 15px; height: 15px; }
+.peek-bk .n { display: flex; flex-direction: column; min-width: 0; }
+.peek-bk .ttl { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.peek-bk .sub { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.peek .anone { margin: 0; }
+.peek-hint { margin: 2px 0 0; font-size: 11px; color: var(--muted); }
+
+/* Day view: hour by hour */
+.dayv { display: flex; flex-direction: column; gap: 12px; }
+.dayv-top { display: flex; flex-direction: column; gap: 8px; }
+.dayv-top .anone { margin: 0; }
+.allday { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; }
+.allday-t { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+.allday .wbk { width: auto; max-width: 100%; margin: 0 6px 0 0; padding: 4px 8px; }
+.hours-scroll { max-height: min(640px, 66vh); overflow-y: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overscroll-behavior: contain; }
+.hours { position: relative; }
+.hour { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.hour:first-child { border-top: 0; }
+.hour .hl { position: absolute; top: -8px; left: 0; width: 48px; padding-right: 8px; text-align: right; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; background: var(--surface); }
+.blocks { position: absolute; inset: 0 0 0 52px; }
+.hblock { position: absolute; display: flex; flex-direction: column; gap: 1px; overflow: hidden; text-align: left; border: 0; border-left: 3px solid var(--kc); border-radius: 0 var(--r-sm) var(--r-sm) 0; padding: 4px 8px; background: color-mix(in srgb, var(--kc) var(--tint), var(--surface)); color: var(--ink); font-size: 12px; line-height: 1.3; }
+.hblock:hover { background: color-mix(in srgb, var(--kc) calc(var(--tint) + 12%), var(--surface)); z-index: 1; }
+.hblock .tm { font-weight: 700; font-size: 11.5px; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--kc) 40%, var(--ink)); }
+.hblock .ttl { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hblock .sub { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hblock.short { flex-direction: row; align-items: baseline; gap: 6px; padding-block: 2px; }
+.hblock.cut-top { border-top-left-radius: 0; border-top-right-radius: 0; }
+.hblock.cut-bot { border-bottom-right-radius: 0; }
+.now-line { position: absolute; left: 48px; right: 0; height: 0; border-top: 2px solid var(--alert); z-index: 2; pointer-events: none; }
+.now-line::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--alert); }
+.dayv-hint { margin: 0; font-size: 12px; color: var(--muted); }
+.dayv-hint .finger { display: none; }
+@media (hover: none) { .dayv-hint .mouse { display: none; } .dayv-hint .finger { display: inline; } }
+.dayv .hours { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+.ctx-menu { position: fixed; z-index: 30; min-width: 220px; background: var(--surface); border-radius: var(--r-md); box-shadow: var(--shadow), 0 10px 28px rgba(0,0,0,.16); padding: 5px; display: flex; flex-direction: column; animation: peek-in .12s ease-out; transform-origin: top left; }
+.ctx-menu button { border: 0; background: transparent; text-align: left; padding: 9px 11px; border-radius: var(--r-sm); font-size: 14px; color: var(--ink); }
+.ctx-menu button:hover, .ctx-menu button:focus-visible { background: var(--soft); }
+.cell, .wdow, .wplace, .wcell { cursor: pointer; }

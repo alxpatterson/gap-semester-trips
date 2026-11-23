@@ -197,6 +197,98 @@ export function bookingsOn<T extends Pick<Booking, "date" | "end_date" | "type" 
     .sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
 }
 
+/**
+ * The `time` column is free text a person typed, so take what can be read and ignore the rest:
+ * "09:40", "9:40", "7:30 pm", "9am" all work; "morning" doesn't and the booking is treated as untimed.
+ */
+export function parseTime(time: string): { h: number; m: number } | null {
+  const m = /^\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*$/i.exec(time ?? "");
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = Number(m[2] ?? 0);
+  const ap = m[3]?.toLowerCase();
+  if (min > 59) return null;
+  if (ap) {
+    if (h < 1 || h > 12) return null;
+    h = (h % 12) + (ap === "pm" ? 12 : 0);
+  } else if (h > 23) return null;
+  return { h, m: min };
+}
+
+/** Fallback length for a timed booking with no arrival time — a guess, so keep it modest. */
+export const GUESS_HOURS: Record<BookingType, number> = { flight: 2, train: 2, bus: 2, car: 2, boat: 2, activity: 2, food: 2, stay: 1, other: 1 };
+
+/** "14:30" from minutes after midnight; 24:00 stays 24:00 so a block running to midnight reads right. */
+export const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+
+export type ScheduleBlock<T> = {
+  b: T;
+  start: number; // minutes after midnight on this day
+  end: number; // exclusive, at most 24 * 60
+  /** Started the day before (an overnight journey landing today) or runs past midnight. */
+  fromBefore: boolean;
+  intoAfter: boolean;
+  col: number; // side-by-side position among the blocks it overlaps
+  cols: number;
+};
+
+/**
+ * One day laid out by the hour. A booking with a time it can read becomes a block from that time to
+ * its arrival (or a guessed length); an overnight journey shows on both days, cut at midnight.
+ * Anything without a readable time, a check-out and a multi-night stay's middle go in `allDay`.
+ * Overlapping blocks share the width, each cluster split into as many columns as it needs.
+ */
+export function daySchedule<T extends Pick<Booking, "date" | "end_date" | "type" | "time" | "arrive_time">>(bookings: T[], day: string) {
+  const allDay: T[] = [];
+  const timed: Omit<ScheduleBlock<T>, "col" | "cols">[] = [];
+  for (const b of bookings) {
+    if (!b.date) continue;
+    const at = parseTime(b.time);
+    const arrives = parseTime(b.arrive_time);
+    const startMin = at ? at.h * 60 + at.m : 0;
+    const arriveMin = arrives ? arrives.h * 60 + arrives.m : 0;
+    // The day it lands: end_date when given, else the next morning if the arrival is no later.
+    const lands = at && arrives ? (b.end_date && b.end_date > b.date ? b.end_date : arriveMin > startMin ? b.date : addDays(b.date, 1)) : b.date;
+
+    if (b.date === day) {
+      if (!at) {
+        allDay.push(b);
+      } else {
+        const end = arrives ? (lands === day ? arriveMin : 24 * 60) : Math.min(24 * 60, startMin + GUESS_HOURS[b.type] * 60);
+        timed.push({ b, start: startMin, end: Math.max(end, startMin + 30), fromBefore: false, intoAfter: lands > day || startMin + GUESS_HOURS[b.type] * 60 > 24 * 60 });
+      }
+    } else if (at && arrives && b.date < day && lands >= day && b.type !== "stay") {
+      // An overnight journey still under way: from midnight until it lands (or all of today).
+      const end = lands === day ? arriveMin : 24 * 60;
+      if (end > 0) timed.push({ b, start: 0, end: Math.max(end, 30), fromBefore: true, intoAfter: lands > day });
+    } else if (b.type === "stay" && b.end_date === day && b.date < day) {
+      allDay.push(b); // check-out
+    }
+  }
+
+  timed.sort((p, q) => p.start - q.start || q.end - p.end);
+  const placed: ScheduleBlock<T>[] = [];
+  let cluster: ScheduleBlock<T>[] = [];
+  let clusterEnd = -1;
+  const close = () => {
+    const n = Math.max(0, ...cluster.map((x) => x.col + 1));
+    for (const x of cluster) x.cols = n;
+    cluster = [];
+  };
+  for (const t of timed) {
+    if (t.start >= clusterEnd) close();
+    const busy = new Set(cluster.filter((x) => x.end > t.start).map((x) => x.col));
+    let col = 0;
+    while (busy.has(col)) col++;
+    const block = { ...t, col, cols: 1 };
+    cluster.push(block);
+    placed.push(block);
+    clusterEnd = Math.max(clusterEnd, t.end);
+  }
+  close();
+  return { allDay, timed: placed };
+}
+
 // ---------- Access ----------
 /**
  * Whether this person can change anything right now. Viewers never can; everyone else can only

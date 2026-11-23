@@ -11,7 +11,9 @@
  * guess. Floating means every client shows 09:40, which is what someone reading "09:40" wants.
  */
 import type { Booking, Plan, Trip } from "./types";
-import { addDays } from "./logic";
+import { addDays, GUESS_HOURS as HOURS, parseTime } from "./logic";
+
+export { parseTime };
 
 const CRLF = "\r\n";
 
@@ -51,30 +53,10 @@ export const icsDate = (d: string) => d.replace(/-/g, "");
 /** A UTC timestamp for DTSTAMP. */
 export const icsStamp = (iso: string) => `${iso.slice(0, 19).replace(/[-:]/g, "")}Z`;
 
-/**
- * The `time` column is free text a person typed, so take what can be read and ignore the rest:
- * "09:40", "9:40", "7:30 pm", "9am" all work; "morning" doesn't and becomes an all-day event.
- */
-export function parseTime(time: string): { h: number; m: number } | null {
-  const m = /^\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*$/i.exec(time ?? "");
-  if (!m) return null;
-  let h = Number(m[1]);
-  const min = Number(m[2] ?? 0);
-  const ap = m[3]?.toLowerCase();
-  if (min > 59) return null;
-  if (ap) {
-    if (h < 1 || h > 12) return null;
-    h = (h % 12) + (ap === "pm" ? 12 : 0);
-  } else if (h > 23) return null;
-  return { h, m: min };
-}
-
 /** A floating date-time: 2027-01-05 + 9:40 → 20270105T094000. */
 export const icsLocal = (date: string, h: number, m: number) =>
   `${icsDate(date)}T${String(h).padStart(2, "0")}${String(m).padStart(2, "0")}00`;
 
-/** Fallback length for a timed booking with no arrival time — a guess, so keep it modest. */
-const HOURS: Record<Booking["type"], number> = { flight: 2, train: 2, bus: 2, car: 2, boat: 2, activity: 2, food: 2, stay: 1, other: 1 };
 
 const plus = (date: string, h: number, m: number, hours: number) => {
   const end = h + hours;

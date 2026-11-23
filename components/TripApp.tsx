@@ -794,6 +794,16 @@ function PlanView({
           onTrip={(id) => setView({ kind: "trip", id })}
           onBooking={(id) => setView({ kind: "booking", id })}
           onPickDays={canEdit ? (start, end) => setView({ kind: "day-pick", start, end }) : undefined}
+          onAdd={
+            canEdit
+              ? (what, date, time) =>
+                  setView(
+                    what === "trip"
+                      ? { kind: "trip-form", trip: { start_date: date } }
+                      : { kind: "booking-form", booking: { date, time: time ?? "", type: "activity" } },
+                  )
+              : undefined
+          }
         />
       ) : tab === "home" ? (
         <section className="home-grid">

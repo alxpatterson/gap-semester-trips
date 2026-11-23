@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  daySchedule,
   bookingsOn,
   bookingWhen,
   budgetSummary,
@@ -339,5 +340,47 @@ describe("filing Gmail bookings into shared trips", () => {
   it("leaves undated bookings and trips without dates alone", () => {
     expect(sharedTripFor(bk({ date: null }), [rome], own)).toBeNull();
     expect(sharedTripFor(bk({}), [{ ...rome, start_date: null }], own)).toBeNull();
+  });
+});
+
+describe("daySchedule", () => {
+  type B = Pick<Booking, "date" | "end_date" | "type" | "time" | "arrive_time"> & { id: string };
+  const b = (id: string, p: Partial<B>): B => ({ id, date: "2027-02-10", end_date: null, type: "activity", time: "", arrive_time: "", ...p });
+
+  it("puts untimed bookings and check-outs in all day", () => {
+    const { allDay, timed } = daySchedule(
+      [b("a", { time: "morning" }), b("s", { type: "stay", date: "2027-02-07", end_date: "2027-02-10" })],
+      "2027-02-10",
+    );
+    expect(allDay.map((x) => x.id)).toEqual(["a", "s"]);
+    expect(timed).toEqual([]);
+  });
+
+  it("runs a timed booking to its arrival, or a guessed length", () => {
+    const { timed } = daySchedule([b("t", { type: "train", time: "9:15", arrive_time: "11:40" }), b("d", { type: "food", time: "7pm" })], "2027-02-10");
+    expect(timed.map((x) => [x.b.id, x.start, x.end])).toEqual([
+      ["t", 555, 700],
+      ["d", 1140, 1260],
+    ]);
+  });
+
+  it("splits an overnight flight across midnight", () => {
+    const f = b("f", { type: "flight", time: "22:30", arrive_time: "06:10" });
+    const night = daySchedule([f], "2027-02-10").timed[0];
+    expect([night.start, night.end, night.intoAfter]).toEqual([1350, 1440, true]);
+    const morning = daySchedule([f], "2027-02-11").timed[0];
+    expect([morning.start, morning.end, morning.fromBefore]).toEqual([0, 370, true]);
+  });
+
+  it("sets overlapping blocks side by side", () => {
+    const { timed } = daySchedule(
+      [b("a", { time: "10:00", arrive_time: "12:00" }), b("b", { time: "11:00" }), b("c", { time: "15:00" })],
+      "2027-02-10",
+    );
+    expect(timed.map((x) => [x.b.id, x.col, x.cols])).toEqual([
+      ["a", 0, 2],
+      ["b", 1, 2],
+      ["c", 0, 1],
+    ]);
   });
 });
