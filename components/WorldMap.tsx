@@ -34,7 +34,7 @@ const LABEL_GAP = 1.14;
 const TOOLBAR_PX = 50;
 /** Labels drawn at once. A cap keeps a wide zoom from putting a hundred names on screen. */
 const MAX_LABELS = 70;
-/** Plus Jakarta Sans bold, as a fraction of the font size — close enough to reserve space with. */
+/** Hanken Grotesk bold, as a fraction of the font size — close enough to reserve space with. */
 const CHAR_WIDTH = 0.56;
 /** A tap that travelled further than this was a drag, and must not open the country under it. */
 const TAP_SLOP = 8;

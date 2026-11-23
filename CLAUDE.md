@@ -62,7 +62,7 @@ A push to `main` deploys within a minute, but migrations are **not** applied aut
 - Colour tokens are CSS variables on `:root` with a dark-mode override; use tokens, never literal colours in components. The map adds `--map-sea` and `--map-land`; a country reuses the calendar's hues (`--k-base` for been and here now, `--k-travel` for booked, `--k-weekend` hatched for an idea), and "here now" is outlined in `--ink` because `--link` is the same green as the fill in dark mode. Warm neutral ground, near-white cards, pastel hues. Pastels are fills only: text on a solid pastel uses `--tint-ink`, text on a translucent wash mixes the hue into `--ink`, and `--link` / `--alert` are the readable versions of the accent and of red. Check contrast before changing any of them.
 - Cards carry `--shadow` instead of a border. Radius scale is `--r-sm/--r-md/--r-lg`; nothing is a capsule.
 - Every booking row starts with a `TypeTile` (`components/ui.tsx`): a square icon tile tinted by the booking's category.
-- Fonts: Plus Jakarta Sans throughout (700/800 for headings, tight tracking); IBM Plex Mono only for confirmation codes. Numbers use `font-variant-numeric: tabular-nums` rather than a mono face.
+- Fonts: Hanken Grotesk throughout, a free stand-in for the Cursor site typeface (700/800 for headings, tight tracking); IBM Plex Mono only for confirmation codes. Numbers use `font-variant-numeric: tabular-nums` rather than a mono face.
 - Must work at 390px wide with no sideways scroll, and respect safe-area insets (it runs full-screen on iPhone).
 
 ## README

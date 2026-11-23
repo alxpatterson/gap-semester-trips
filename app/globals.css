@@ -16,8 +16,8 @@
   /* Cards sit on the ground with a shadow rather than a hairline. */
   --shadow: 0 1px 2px rgba(31, 22, 15, .05), 0 10px 26px -14px rgba(31, 22, 15, .20);
   --shadow-sm: 0 1px 2px rgba(31, 22, 15, .06);
-  --display: "Bricolage Grotesque", "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif;
-  --body: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: "Hanken Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   color-scheme: light;
 }
