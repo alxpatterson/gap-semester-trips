@@ -137,7 +137,7 @@ a { color: var(--link); }
 .scroller { overflow-x: auto; }
 .grid { display: grid; grid-template-columns: repeat(7, minmax(74px, 1fr)); min-width: 540px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .dow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 6px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--soft); }
-.cell { min-height: 92px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4px 0 6px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cell { min-height: 132px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4px 0 6px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .cell.out { background: var(--soft); }
 .cell.out .dnum { opacity: .45; }
 .cell.today { background: color-mix(in srgb, var(--accent) 14%, transparent); }
@@ -162,7 +162,7 @@ a { color: var(--link); }
   /* All seven columns fit the screen rather than scrolling: narrow columns, smaller type. */
   .grid { min-width: 0; grid-template-columns: repeat(7, minmax(0, 1fr)); }
   .dow { font-size: 9.5px; letter-spacing: .04em; padding: 5px 4px; }
-  .cell { min-height: 70px; padding: 3px 0 5px; }
+  .cell { min-height: 100px; padding: 3px 0 5px; }
   .dnum { font-size: 11px; margin-left: 3px; padding: 0 3px; }
   .bar { font-size: 10px; height: 16px; line-height: 16px; padding: 0 3px; border-left-width: 2px; }
   .bar.s { margin-left: 2px; }
@@ -183,14 +183,14 @@ a { color: var(--link); }
 
 /* Week: seven columns, trips as continuous bars across the top of them */
 .wgrid { display: grid; grid-template-columns: repeat(7, minmax(78px, 1fr)); min-width: 546px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
-.wdow { display: flex; align-items: baseline; gap: 6px; padding: 6px 8px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.wdow { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 8px 4px 9px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: center; }
 .wdow span { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.wdow b { font-family: var(--display); font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
+.wdow b { font-family: var(--display); font-size: 22px; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .wdow.today b { background: var(--accent); color: var(--accent-ink); border-radius: var(--r-sm); padding: 0 6px; }
 .wdow.today span { color: var(--link); }
 .wplace { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 5px 0; background: var(--soft); border-right: 1px solid var(--line); border-bottom: 2px solid var(--line); }
 .wplace.today { background: color-mix(in srgb, var(--accent) 16%, var(--soft)); }
-.wcell { display: flex; flex-direction: column; gap: 3px; min-height: 130px; min-width: 0; padding: 5px 0 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.wcell { display: flex; flex-direction: column; gap: 3px; min-height: 240px; min-width: 0; padding: 5px 0 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .wcell.today { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .bar.gap { background: none; pointer-events: none; }
 .wplace .bar .lbl { display: block; overflow: hidden; text-overflow: ellipsis; }
@@ -541,3 +541,9 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
 .bk-tabs button .n { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; opacity: .6; }
 .bk-tabs button[aria-pressed="true"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--kc, var(--ink)); }
 .side .split { margin-bottom: 0; }
+
+/* Click or drag across days to add something: the days in the selection are washed in the accent. */
+.grid, .wgrid { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.cell, .wdow, .wplace, .wcell { cursor: cell; }
+.cell:hover:not(.out), .wcell:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.cell.sel, .wdow.sel, .wplace.sel, .wcell.sel { background: color-mix(in srgb, var(--accent) 38%, var(--surface)); }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 
 import {
   BOOKING_TYPES,
@@ -32,6 +32,79 @@ import {
 import type { Booking, Trip } from "@/lib/types";
 import { TypeTile } from "./ui";
 
+
+/**
+ * Click a day, or drag across several, to start something on those dates. A mouse or pen drags
+ * straight away; a finger has to press and hold first, because a swipe on a phone is how you scroll.
+ * Anything already on a day (a trip bar, a booking) keeps its own click.
+ */
+function useDayPick(enabled: boolean, onPick?: (start: string, end: string) => void) {
+  const [sel, setSel] = useState<{ a: string; b: string } | null>(null);
+  const st = useRef<{ id: number; a: string; touch: boolean; armed: boolean; x: number; y: number; timer?: ReturnType<typeof setTimeout> } | null>(null);
+  const box = useRef<HTMLElement | null>(null);
+  const dayAt = (x: number, y: number) => (document.elementFromPoint(x, y) as HTMLElement | null)?.closest<HTMLElement>("[data-day]")?.dataset.day ?? null;
+
+  // Once a finger has been held, the browser must not take the gesture over as a scroll.
+  useEffect(() => {
+    const el = box.current;
+    if (!el || !enabled) return;
+    const stop = (e: TouchEvent) => st.current?.armed && e.cancelable && e.preventDefault();
+    el.addEventListener("touchmove", stop, { passive: false });
+    return () => el.removeEventListener("touchmove", stop);
+  }, [enabled]);
+
+  const end = () => {
+    if (st.current?.timer) clearTimeout(st.current.timer);
+    st.current = null;
+    setSel(null);
+  };
+
+  if (!enabled) return { sel: null, bind: {}, ref: box };
+  const bind = {
+    onPointerDown: (e: RPointerEvent<HTMLElement>) => {
+      if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input")) return;
+      const a = (e.target as HTMLElement).closest<HTMLElement>("[data-day]")?.dataset.day;
+      if (!a) return;
+      const touch = e.pointerType === "touch";
+      st.current = { id: e.pointerId, a, touch, armed: !touch, x: e.clientX, y: e.clientY };
+      if (touch) {
+        st.current.timer = setTimeout(() => {
+          if (!st.current) return;
+          st.current.armed = true;
+          setSel({ a, b: a });
+          try { navigator.vibrate?.(8); } catch {}
+        }, 350);
+      } else {
+        setSel({ a, b: a });
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+      }
+    },
+    onPointerMove: (e: RPointerEvent<HTMLElement>) => {
+      const c = st.current;
+      if (!c || e.pointerId !== c.id) return;
+      if (!c.armed) {
+        // Moved before the hold finished: they are scrolling, so leave them to it.
+        if (Math.hypot(e.clientX - c.x, e.clientY - c.y) > 8) end();
+        return;
+      }
+      const d = dayAt(e.clientX, e.clientY);
+      if (d) setSel((cur) => (cur && cur.b !== d ? { a: c.a, b: d } : cur));
+    },
+    onPointerUp: (e: RPointerEvent<HTMLElement>) => {
+      const c = st.current;
+      if (!c || e.pointerId !== c.id) return;
+      const d = (c.armed && dayAt(e.clientX, e.clientY)) || (c.touch && !c.armed ? c.a : null) || sel?.b || c.a;
+      const a = c.a;
+      end();
+      if (d) onPick?.(a <= d ? a : d, a <= d ? d : a);
+    },
+    onPointerCancel: end,
+  };
+  return { sel, bind, ref: box };
+}
+
+const inSel = (sel: { a: string; b: string } | null, d: string) => !!sel && d >= (sel.a < sel.b ? sel.a : sel.b) && d <= (sel.a < sel.b ? sel.b : sel.a);
+
 export function CalendarPanel({
   view,
   anchor,
@@ -45,6 +118,7 @@ export function CalendarPanel({
   onAnchor,
   onTrip,
   onBooking,
+  onPickDays,
 }: {
   view: CalView;
   anchor: string;
@@ -58,6 +132,8 @@ export function CalendarPanel({
   onAnchor: (d: string) => void;
   onTrip: (id: string) => void;
   onBooking: (id: string) => void;
+  /** Set when the person can edit: a click or drag over days asks to add something on them. */
+  onPickDays?: (start: string, end: string) => void;
 }) {
   const all = view === "all";
   const step = view === "month" || all ? "month" : view === "week" ? "week" : "day";
@@ -89,14 +165,14 @@ export function CalendarPanel({
               <button className="allhead" onClick={() => { onAnchor(`${m}-01` < range.start ? range.start : `${m}-01`); onView("month"); }}>
                 {MONTHS_LONG[+m.slice(5) - 1]} {m.slice(0, 4)}
               </button>
-              <MonthGrid month={m} trips={trips} today={today} onTrip={onTrip} />
+              <MonthGrid month={m} trips={trips} today={today} onTrip={onTrip} onPickDays={onPickDays} />
             </section>
           ))}
         </div>
       ) : view === "month" ? (
-        <MonthGrid month={anchor.slice(0, 7)} trips={trips} today={today} onTrip={onTrip} />
+        <MonthGrid month={anchor.slice(0, 7)} trips={trips} today={today} onTrip={onTrip} onPickDays={onPickDays} />
       ) : view === "week" ? (
-        <WeekGrid anchor={anchor} trips={trips} bookings={bookings} today={today} onTrip={onTrip} onBooking={onBooking} />
+        <WeekGrid anchor={anchor} trips={trips} bookings={bookings} today={today} onTrip={onTrip} onBooking={onBooking} onPickDays={onPickDays} />
       ) : (
         <DayView anchor={anchor} currency={currency} trips={trips} bookings={bookings} loaded={loaded} today={today} onTrip={onTrip} onBooking={onBooking} />
       )}
@@ -188,6 +264,7 @@ function WeekGrid({
   today,
   onTrip,
   onBooking,
+  onPickDays,
 }: {
   anchor: string;
   trips: Trip[];
@@ -195,7 +272,9 @@ function WeekGrid({
   today: string;
   onTrip: (id: string) => void;
   onBooking: (id: string) => void;
+  onPickDays?: (start: string, end: string) => void;
 }) {
+  const pick = useDayPick(!!onPickDays, onPickDays);
   const days = viewDays("week", anchor);
   // On a narrow screen only the first few columns fit, so bring the current day into view.
   const scroller = useRef<HTMLDivElement>(null);
@@ -215,9 +294,9 @@ function WeekGrid({
 
   return (
     <div className="scroller" ref={scroller}>
-      <div className="wgrid">
+      <div className="wgrid" ref={pick.ref as React.RefObject<HTMLDivElement>} {...pick.bind}>
         {days.map((d) => (
-          <div key={`h-${d}`} className={`wdow ${d === today ? "today" : ""}`}>
+          <div key={`h-${d}`} data-day={d} className={`wdow ${d === today ? "today" : ""} ${inSel(pick.sel, d) ? "sel" : ""}`}>
             <span>{DOWS[weekday(d)]}</span>
             <b>{+d.slice(8)}</b>
           </div>
@@ -227,7 +306,7 @@ function WeekGrid({
             const n = dayNum(d);
             const col = weekday(d);
             return (
-              <div key={`p-${d}`} className={`wplace ${d === today ? "today" : ""}`}>
+              <div key={`p-${d}`} data-day={d} className={`wplace ${d === today ? "today" : ""} ${inSel(pick.sel, d) ? "sel" : ""}`}>
                 {lanes.map(({ t, a, b }) =>
                   a <= n && n <= b ? (
                     <button
@@ -251,7 +330,7 @@ function WeekGrid({
         {days.map((d) => {
           const items = bookingsOn(bookings, d);
           return (
-            <div key={d} className={`wcell ${d === today ? "today" : ""}`}>
+            <div key={d} data-day={d} className={`wcell ${d === today ? "today" : ""} ${inSel(pick.sel, d) ? "sel" : ""}`}>
               {items.map((b) => {
                 const checkout = b.type === "stay" && b.end_date === d && b.date !== d;
                 return (
@@ -274,7 +353,8 @@ function WeekGrid({
   );
 }
 
-function MonthGrid({ month, trips, today, onTrip }: { month: string; trips: Trip[]; today: string; onTrip: (id: string) => void }) {
+function MonthGrid({ month, trips, today, onTrip, onPickDays }: { month: string; trips: Trip[]; today: string; onTrip: (id: string) => void; onPickDays?: (start: string, end: string) => void }) {
+  const pick = useDayPick(!!onPickDays, onPickDays);
   const [y, m] = month.split("-").map(Number);
   const first = dayNum(`${month}-01`);
   const weekdayOfFirst = (new Date(first * 864e5).getUTCDay() + 6) % 7; // Monday = 0
@@ -284,7 +364,7 @@ function MonthGrid({ month, trips, today, onTrip }: { month: string; trips: Trip
 
   return (
     <div className="scroller">
-      <div className="grid">
+      <div className="grid" ref={pick.ref as React.RefObject<HTMLDivElement>} {...pick.bind}>
         {DOWS.map((d) => (
           <div key={d} className="dow">
             {d}
@@ -296,7 +376,7 @@ function MonthGrid({ month, trips, today, onTrip }: { month: string; trips: Trip
           const col = i % 7;
           const here = tripsOn(trips, ds).map((t) => ({ t, a: dayNum(t.start_date!), b: dayNum(tripEnd(t)!) }));
           return (
-            <div key={ds} className={`cell ${ds.slice(0, 7) !== month ? "out" : ""} ${ds === today ? "today" : ""}`}>
+            <div key={ds} data-day={ds} className={`cell ${ds.slice(0, 7) !== month ? "out" : ""} ${ds === today ? "today" : ""} ${inSel(pick.sel, ds) ? "sel" : ""}`}>
               <span className="dnum">{+ds.slice(8)}</span>
               {here.slice(0, 3).map(({ t, a, b }) => {
                 const showLabel = n === a || col === 0 || ds.endsWith("-01");

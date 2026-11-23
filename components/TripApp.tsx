@@ -26,6 +26,7 @@ type View =
   | { kind: "trip-form"; trip?: Partial<Trip> }
   | { kind: "booking-form"; booking?: Partial<Booking> }
   | { kind: "people" }
+  | { kind: "day-pick"; start: string; end: string }
   | { kind: "country"; code: string }
   | { kind: "new-plan" }
   | { kind: "expense"; id: string }
@@ -601,6 +602,22 @@ function PlanView({
           )}
         </Sheet>
       );
+  } else if (view?.kind === "day-pick") {
+    const { start, end } = view;
+    const ends = end === start ? null : end;
+    sheet = (
+      <Sheet title={fmtRange(start, end)} onClose={() => setView(null)}>
+        <p className="empty" style={{ padding: 0 }}>What are you adding?</p>
+        <div className="row-actions">
+          <button className="btn primary" onClick={() => setView({ kind: "trip-form", trip: { start_date: start, end_date: ends } })}>
+            A trip
+          </button>
+          <button className="btn" onClick={() => setView({ kind: "booking-form", booking: { date: start, end_date: ends, type: "activity" } })}>
+            A booking or event
+          </button>
+        </div>
+      </Sheet>
+    );
   } else if (view?.kind === "trip-form") {
     sheet = (
       <Sheet title={view.trip?.id ? "Edit trip" : "New trip"} onClose={() => setView(null)}>
@@ -774,6 +791,7 @@ function PlanView({
             onAnchor={setAnchor}
             onTrip={(id) => setView({ kind: "trip", id })}
             onBooking={(id) => setView({ kind: "booking", id })}
+            onPickDays={canEdit ? (start, end) => setView({ kind: "day-pick", start, end }) : undefined}
           />
           <div className="side">
             <Tasks
